@@ -1,0 +1,18 @@
+name: epilepsy-dl
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.10
+  - numpy
+  - pandas
+  - scikit-learn
+  - matplotlib
+  - seaborn
+  - jupyterlab
+  - pyarrow
+  - pytorch
+  - torchvision
+  - torchaudio
+  - tqdm
+  - scipy
