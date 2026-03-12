@@ -44,7 +44,7 @@ The project uses the **CHB-MIT Scalp EEG Database**.
 
 Download it from:
 
-https://physionet.org/content/chbmit/1.0.0/
+<https://physionet.org/content/chbmit/1.0.0/>
 
 The dataset should be placed in:
 
@@ -54,4 +54,4 @@ data/
 
 ## Goal
 
-Detect epileptic seizures from multi-channel EEG recordings using different deep learning architectures.
+Detect epileptic seizures from multi-channel EEG recordings using different deep learning architectures

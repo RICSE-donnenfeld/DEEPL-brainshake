@@ -1,4 +1,4 @@
-Epilepsy/
+data/Epilepsy/
 
 rsync_pull.sh
 rsync_push.sh
