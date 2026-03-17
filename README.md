@@ -1,57 +1,88 @@
 # Epileptic Seizure Detection using EEG
 
-Deep Learning project for detecting epileptic seizures using the CHB-MIT EEG dataset.
+<!--toc:start-->
+- [Epileptic Seizure Detection using EEG](#epileptic-seizure-detection-using-eeg)
+  - [Getting started](#getting-started)
+  - [Dataset](#dataset)
+  - [Project structure](#project-structure)
+  - [Usage](#usage)
+  - [Next steps](#next-steps)
+<!--toc:end-->
 
-## Setup
+Lightweight PyTorch tooling and documentation for experimenting with convolutional models on the CHB-MIT scalp EEG recordings.
 
-Clone the repository:
+## Getting started
 
-```bash
-git clone <repo-url>
-cd DEEPL-brainshake
-```
+1. Clone the repo and switch into the project:
 
-Create the conda environment:
+   ```bash
+   git clone <repo-url>
+   cd DEEPL-brainshake
+   ```
 
-```bash
-conda env create -f environment.yml
-```
+2. Recreate the provided environment and activate it:
 
-Activate the environment:
+   ```bash
+   conda env create -f environment.yml
+   conda activate epilepsy-dl
+   ```
 
-```bash
-conda activate epilepsy-dl
-```
+3. Install the package in editable mode so the scripts stay in sync with your edits:
 
-## Project Structure
+   ```bash
+   python -m pip install -e .
+   ```
 
-```
-DEEPL-brainshake/
-│
-├── Architecture/                 # neural network architectures
-├── Data Set Description/         # dataset documentation
-├── References/                   # research papers
-├── Validation and Verification/  # validation methodology
-│
-├── environment.yml               # conda environment
-├── README.md
-└── .gitignore
-```
+4. (Optional) Run the data loader to verify that the CHB-MIT files are accessible:
+
+   ```bash
+   python -m brainshake.data -v
+   ```
 
 ## Dataset
 
-The project uses the **CHB-MIT Scalp EEG Database**.
+The project relies on the **CHB-MIT Scalp EEG Database**.
+Download the full collection from <https://physionet.org/content/chbmit/1.0.0/>, unzip it locally, and move the seizure-specific files into `data/Epilepsy` so the loader can find `chbXX_seizure_EEGwindow_1.npz` and `chbXX_seizure_metadata_1.parquet` pairs.
 
-Download it from:
-
-<https://physionet.org/content/chbmit/1.0.0/>
-
-The dataset should be placed in:
+Suggested layout:
 
 ```
 data/
+└── Epilepsy/
+    ├── chb01_seizure_EEGwindow_1.npz
+    ├── chb01_seizure_metadata_1.parquet
+    ├── ...
+    └── chb24_seizure_metadata_1.parquet
 ```
 
-## Goal
+The loader in `src/brainshake/data.py` iterates over 24 patients, so both `.npz` and `.parquet` files must follow the naming schema above.
 
-Detect epileptic seizures from multi-channel EEG recordings using different deep learning architectures
+## Project structure
+
+```
+DEEPL-brainshake/
+├── docs/                          # research notes, architectures, validation reports
+│   ├── Architecture/              # RNN/LSTM/CNN explorations and code snippets
+│   ├── Data Set Description/      # dataset summaries and text descriptions
+│   ├── References/                # collected papers and external guides
+│   └── Validation and Verification/# experimental designs and statistical analyses
+├── data/                          # user-provided CHB-MIT exports
+│   └── Epilepsy/
+├── src/
+│   └── brainshake/                 # python package containing helpers
+├── environment.yml                # conda environment definition
+├── pyproject.toml                 # package metadata + dependencies
+└── README.md
+```
+
+## Usage
+
+- **Inspect the dataset.** The `brainshake.data` entry point loads every `.npz` EEG window and logs success or failure with increasing verbosity. This is a good sanity check before training.
+- **Train a CNN (under development).** `src/brainshake/train_cnn.py` is intended to orchestrate model, optimizer, and evaluation wiring once training logic is implemented. Run `python -m brainshake.train_cnn` when it is ready.
+- **Reference material.** The `docs/` subtree collects architecture sketches, channel-fusion experiments, and validation plans that can guide experiments.
+
+## Next steps
+
+1. Flesh out `brainshake.train_cnn` with the desired convolutional architecture, data batching, and logging.
+2. Add tests/benchmarks that validate training on a subset of the CHB-MIT windows.
+3. Document reproducibility steps inside `docs/Validation and Verification` to capture the current evaluation plan.
