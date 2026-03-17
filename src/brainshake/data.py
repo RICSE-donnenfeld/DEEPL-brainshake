@@ -30,14 +30,14 @@ def load_data():
     log.debug("...Loaded all 25 parquet metadata files")
 
     ### EGG DATA
-    # egg_win_0 = data[0]["EEG_win"]
+    egg_win_0 = data[0]["EEG_win"]
     # print(len(egg_win_0))  # 45701 --> Number of windows for patient 0
     # print(len(egg_win_0[0]))  # 21 Electrodes ?
     # print(len(egg_win_0[0][0]))  # 128 --> type : Floats : samples
     # print(len(egg_win_0[0][0][0])) # error
     ### First data block has shape (45701,21,128)
 
-    print(metadata[0])
+    print(egg_win_0[0][0])
     ###
     #           class  filename_interval  global_interval      filename
     # 0          0                  1                1         chb24_01.edf
