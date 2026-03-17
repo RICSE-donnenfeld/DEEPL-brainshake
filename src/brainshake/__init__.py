@@ -1,3 +1,3 @@
-"""Source package for project"""
+"""Brainshake module"""
 
 __all__ = []
