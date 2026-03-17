@@ -10,9 +10,9 @@ def load_data():
     log.debug("Starting data load...")
 
     log.debug("Starting EEG data load...")
+    data = []
     for i in range(1, 25):
         filename = f"chb{str(i).zfill(2)}_seizure_EEGwindow_1.npz"
-        data = []
         try:
             data.append(np.load(f"data/Epilepsy/{filename}", allow_pickle=True))
         except Exception as e:
@@ -20,9 +20,9 @@ def load_data():
     log.debug("...Loaded all 25 NPZ EEG files")
 
     log.debug("Starting EEG metadata load...")
+    metadata = []
     for i in range(1, 25):
         filename = f"chb{str(i).zfill(2)}_seizure_metadata_1.parquet"
-        metadata = []
         try:
             metadata.append(pd.read_parquet(f"data/Epilepsy/{filename}"))
         except Exception as e:
