@@ -38,8 +38,19 @@ class EGGDataset(Dataset):
             except Exception as e:
                 log.error(f"Could not load {metadata_filename}: {e}")
 
+            # print(len(egg_win_0))  # 45701 --> Number of windows for patient 0
+            # print(len(egg_win_0[0]))  # 21 Electrodes ?
+            # print(len(egg_win_0[0][0]))  # 128 --> type : Floats : samples
+            # print(len(egg_win_0[0][0][0])) # error
+
+            # TODO : How to store data ? maybe split and explicitate the 21 electrodes already
+            # Store electrodes in a dict per patient
+
+            # self.samples.append((data, metadata))
+            # self.patient_ids.append(pat_id)
+
     def __len__(self):
-        return len(self.data)
+        return len(self.samples)
 
     def __getitem__(self, idx):
         x = torch.tensor(self.data[idx], dtype=torch.float32)
