@@ -1,130 +1,225 @@
-"""
-Data module
----
--> Used to create a pytorch dataset
--> For each individual EGG signal we're computing features ( delegate to feature module )
--> This module handles data loading
-"""
+from pathlib import Path
+from typing import Optional, Sequence
 
 import numpy as np
-import argparse
-import logging
 import pandas as pd
-from typing import Tuple
-from pathlib import Path
-import matplotlib.pyplot as plt
-from torch.utils.data import Dataset
 import torch
+from torch.utils.data import Dataset
+from torch.utils.data import DataLoader
 
-log = logging.getLogger(__name__)
+class EEGDataset(Dataset):
+    """
+    PyTorch Dataset for CHB-MIT EEG windows.
+
+    Expected files in data_dir:
+        chb01_seizure_EEGwindow_1.npz
+        chb01_seizure_metadata_1.parquet
+        ...
+        chb24_seizure_EEGwindow_1.npz
+        chb24_seizure_metadata_1.parquet
+
+    Each NPZ file must contain:
+        EEG_win -> shape [N, 21, 128]
+
+    Each parquet file must contain:
+        class -> shape [N]
+    """
+
+    def __init__(
+        self,
+        data_dir: str | Path,
+        patient_ids: Optional[Sequence[int]] = None,
+        normalize: bool = False,
+    ) -> None:
+        self.data_dir = Path(data_dir)
+        self.patient_ids = list(patient_ids) if patient_ids is not None else list(range(1, 25))
+        self.normalize = normalize
+
+        self.data, self.labels, self.patient_index = self._load_all_patients()
+
+        if self.normalize:
+            mean = self.data.mean()
+            std = self.data.std()
+            if std == 0:
+                raise ValueError("Standard deviation is zero, cannot normalize dataset.")
+            self.data = (self.data - mean) / std
+
+    def _load_all_patients(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        all_data = []
+        all_labels = []
+        all_patients = []
+
+        for patient_id in self.patient_ids:
+            pid = f"chb{patient_id:02d}"
+
+            npz_path = self.data_dir / f"{pid}_seizure_EEGwindow_1.npz"
+            meta_path = self.data_dir / f"{pid}_seizure_metadata_1.parquet"
+
+            if not npz_path.exists():
+                print(f"Warning: missing EEG file {npz_path}")
+                continue
+
+            if not meta_path.exists():
+                print(f"Warning: missing metadata file {meta_path}")
+                continue
+
+            npz_data = np.load(npz_path, allow_pickle=True)
+            if "EEG_win" not in npz_data:
+                raise KeyError(f"'EEG_win' not found in {npz_path}")
+
+            eeg_windows = npz_data["EEG_win"].astype(np.float32)
+            metadata = pd.read_parquet(meta_path)
+
+            if "class" not in metadata.columns:
+                raise KeyError(f"'class' column not found in {meta_path}")
+
+            labels = metadata["class"].to_numpy(dtype=np.int64)
+
+            if len(eeg_windows) != len(labels):
+                raise ValueError(
+                    f"Mismatch for {pid}: {len(eeg_windows)} windows but {len(labels)} labels"
+                )
+
+            all_data.append(eeg_windows)
+            all_labels.append(labels)
+            all_patients.append(np.full(len(labels), patient_id, dtype=np.int64))
+
+            print(f"Loaded {pid}: {eeg_windows.shape}, labels={labels.shape}")
+
+        if not all_data:
+            raise RuntimeError("No patient data could be loaded. Check data_dir and file names.")
+
+        data = np.concatenate(all_data, axis=0)         # [N_total, 21, 128]
+        labels = np.concatenate(all_labels, axis=0)     # [N_total]
+        patient_index = np.concatenate(all_patients, axis=0)
+
+        return data, labels, patient_index
+
+    def __len__(self) -> int:
+        return len(self.labels)
+
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        x = torch.tensor(self.data[index], dtype=torch.float32)   # [21, 128]
+        y = torch.tensor(self.labels[index], dtype=torch.long)    # scalar
+        return x, y
+
+    def summary(self) -> None:
+        unique, counts = np.unique(self.labels, return_counts=True)
+        class_distribution = dict(zip(unique.tolist(), counts.tolist()))
+
+        print("Dataset summary")
+        print(f"  data shape: {self.data.shape}")
+        print(f"  labels shape: {self.labels.shape}")
+        print(f"  class distribution: {class_distribution}")
+        print(f"  patients loaded: {sorted(set(self.patient_index.tolist()))}")
 
 
-class EGGDataset(Dataset):
-    def __init__(self, data_dir="data/Epilepsy"):
+class EEGDataset(Dataset):
+    def __init__(
+        self,
+        data_dir: str | Path,
+        patient_ids: Optional[Sequence[int]] = None,
+        normalize: bool = False,
+    ) -> None:
+        self.data_dir = Path(data_dir)
+        self.patient_ids = list(patient_ids) if patient_ids is not None else list(range(1, 25))
+        self.normalize = normalize
 
-        self.samples: list[Tuple[Path, int]] = []
-        self.patient_ids: list[str] = []
+        self.data, self.labels, self.patient_index = self._load_all_patients()
 
-        for i in range(1, 25):
-            data_filename = f"chb{str(i).zfill(2)}_seizure_EEGwindow_1.npz"
-            try:
-                data = np.load(f"{data_dir}/{data_filename}", allow_pickle=True)
-            except Exception as e:
-                log.error(f"Could not load {data_filename}: {e}")
+        if self.normalize:
+            mean = self.data.mean()
+            std = self.data.std()
+            if std == 0:
+                raise ValueError("Standard deviation is zero, cannot normalize dataset.")
+            self.data = (self.data - mean) / std
 
-            metadata_filename = f"chb{str(i).zfill(2)}_seizure_metadata_1.parquet"
-            try:
-                metadata = pd.read_parquet(f"data/Epilepsy/{metadata_filename}")
-            except Exception as e:
-                log.error(f"Could not load {metadata_filename}: {e}")
+    def _load_all_patients(self):
+        all_data = []
+        all_labels = []
+        all_patients = []
 
-            # print(len(egg_win_0))  # 45701 --> Number of windows for patient 0
-            # print(len(egg_win_0[0]))  # 21 Electrodes ?
-            # print(len(egg_win_0[0][0]))  # 128 --> type : Floats : samples
-            # print(len(egg_win_0[0][0][0])) # error
+        for patient_id in self.patient_ids:
+            pid = f"chb{patient_id:02d}"
 
-            # TODO : How to store data ? maybe split and explicitate the 21 electrodes already
-            # Store electrodes in a dict per patient
+            npz_path = self.data_dir / f"{pid}_seizure_EEGwindow_1.npz"
+            meta_path = self.data_dir / f"{pid}_seizure_metadata_1.parquet"
 
-            # self.samples.append((data, metadata))
-            # self.patient_ids.append(pat_id)
+            if not npz_path.exists():
+                print(f"Warning: missing EEG file {npz_path}")
+                continue
+
+            if not meta_path.exists():
+                print(f"Warning: missing metadata file {meta_path}")
+                continue
+
+            npz_data = np.load(npz_path, allow_pickle=True)
+            if "EEG_win" not in npz_data:
+                raise KeyError(f"'EEG_win' not found in {npz_path}")
+
+            eeg_windows = npz_data["EEG_win"].astype(np.float32)
+            metadata = pd.read_parquet(meta_path)
+
+            if "class" not in metadata.columns:
+                raise KeyError(f"'class' column not found in {meta_path}")
+
+            labels = metadata["class"].to_numpy(dtype=np.int64)
+
+            if len(eeg_windows) != len(labels):
+                raise ValueError(
+                    f"Mismatch for {pid}: {len(eeg_windows)} windows but {len(labels)} labels"
+                )
+
+            all_data.append(eeg_windows)
+            all_labels.append(labels)
+            all_patients.append(np.full(len(labels), patient_id, dtype=np.int64))
+
+            print(f"Loaded {pid}: {eeg_windows.shape}, labels={labels.shape}")
+
+        if not all_data:
+            raise RuntimeError(f"No data loaded from {self.data_dir}")
+
+        data = np.concatenate(all_data, axis=0)
+        labels = np.concatenate(all_labels, axis=0)
+        patient_index = np.concatenate(all_patients, axis=0)
+
+        return data, labels, patient_index
 
     def __len__(self):
-        return len(self.samples)
+        return len(self.labels)
 
-    def __getitem__(self, idx):
-        x = torch.tensor(self.data[idx], dtype=torch.float32)
-        y = torch.tensor(self.labels[idx], dtype=torch.long)
+    def __getitem__(self, index):
+        x = torch.tensor(self.data[index], dtype=torch.float32)
+        y = torch.tensor(self.labels[index], dtype=torch.long)
         return x, y
+
+    def summary(self):
+        unique, counts = np.unique(self.labels, return_counts=True)
+        print("Dataset summary")
+        print("data shape:", self.data.shape)
+        print("labels shape:", self.labels.shape)
+        print("class distribution:", dict(zip(unique.tolist(), counts.tolist())))
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        action="count",
-        default=0,
-        help="Number of v's increases verbosity",
-    )
+    repo_root = Path(__file__).resolve().parents[2]
+    data_dir = repo_root / "data" / "Epilepsy"
 
-    args = parser.parse_args()
-    verbosity = args.verbose
+    print("Using data directory:", data_dir)
 
-    loglevel = logging.WARNING
+    dataset = EEGDataset(data_dir=data_dir, patient_ids=[1, 2, 3], normalize=False)
+    dataset.summary()
 
-    if verbosity >= 2:
-        loglevel = logging.DEBUG
-    elif verbosity == 1:
-        loglevel = logging.INFO
+    x, y = dataset[0]
+    print("Single sample shape:", x.shape)
+    print("Single label:", y.item())
 
-    logging.basicConfig(level=loglevel, format="%(levelname)s: %(message)s")
+    loader = DataLoader(dataset, batch_size=8, shuffle=True)
 
-    load_data()
-
-
-def load_data():
-    log.debug("Starting data load...")
-
-    log.debug("Starting EEG data load...")
-    data = []
-    for i in range(1, 25):
-        filename = f"chb{str(i).zfill(2)}_seizure_EEGwindow_1.npz"
-        try:
-            data.append(np.load(f"data/Epilepsy/{filename}", allow_pickle=True))
-        except Exception as e:
-            log.error(f"Could not load {filename}: {e}")
-    log.debug("...Loaded all 25 NPZ EEG files")
-
-    log.debug("Starting EEG metadata load...")
-    metadata = []
-    for i in range(1, 25):
-        filename = f"chb{str(i).zfill(2)}_seizure_metadata_1.parquet"
-        try:
-            metadata.append(pd.read_parquet(f"data/Epilepsy/{filename}"))
-        except Exception as e:
-            log.error(f"Could not load {filename}: {e}")
-    log.debug("...Loaded all 25 parquet metadata files")
-
-    ### EGG DATA
-    egg_win_0 = data[0]["EEG_win"]
-    # print(len(egg_win_0))  # 45701 --> Number of windows for patient 0
-    # print(len(egg_win_0[0]))  # 21 Electrodes ?
-    # print(len(egg_win_0[0][0]))  # 128 --> type : Floats : samples
-    # print(len(egg_win_0[0][0][0])) # error
-    ### First data block has shape (45701,21,128)
-
-    ###
-    #           class  filename_interval  global_interval      filename
-    # 0          0                  1                1         chb24_01.edf
-    # 1          0                  1                1         chb24_01.edf
-    # ...
-    # 45699      1                  1               16         chb24_21.edf
-    # 45700      1                  1               16         chb24_21.edf
-    #
-
-    plt.plot(egg_win_0[0][0])
-    plt.savefig("graphs/first_data_visualization.png")
+    x_batch, y_batch = next(iter(loader))
+    print("Batch sample shape:", x_batch.shape)
+    print("Batch label shape:", y_batch.shape)
+    print("Batch labels:", y_batch)
 
 
 if __name__ == "__main__":
