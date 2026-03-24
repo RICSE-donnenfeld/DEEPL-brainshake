@@ -19,7 +19,8 @@
       "non_seizure_avg_min": -73.94923401259565,
       "non_seizure_avg_max": 74.56179999188025,
       "non_seizure_avg_range": 148.51103400083483,
-      "patient_id": 1
+      "patient_id": 1,
+      "windows": 26529
     },
     {
       "n_seizure": 1352,
@@ -34,7 +35,8 @@
       "non_seizure_avg_min": -153.1588474150698,
       "non_seizure_avg_max": 159.1364728599928,
       "non_seizure_avg_range": 312.2953202079281,
-      "patient_id": 2
+      "patient_id": 2,
+      "windows": 9153
     },
     {
       "n_seizure": 3160,
@@ -49,7 +51,8 @@
       "non_seizure_avg_min": -66.33666110488899,
       "non_seizure_avg_max": 70.62838221081684,
       "non_seizure_avg_range": 136.9650432813385,
-      "patient_id": 3
+      "patient_id": 3,
+      "windows": 27524
     }
   ],
   "metrics_mean_all": {
