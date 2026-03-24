@@ -1,9 +1,10 @@
 from pathlib import Path
 
-import torch
 import argparse
-import torch.nn as nn
 import logging
+
+import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from .data import EEGDataset
@@ -47,6 +48,8 @@ class SimpleEEGCNN(nn.Module):
 
 
 def train(epochs, train_dataset=None):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     repo_root = Path(__file__).resolve().parents[2]
     data_dir = repo_root / "data" / "Epilepsy"
 
@@ -58,7 +61,7 @@ def train(epochs, train_dataset=None):
         dataset = train_dataset
     loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-    model = SimpleEEGCNN()
+    model = SimpleEEGCNN().to(device)
 
     # simple class weighting because seizure class is smaller
     n0 = (dataset.labels == 0).sum()
@@ -66,6 +69,7 @@ def train(epochs, train_dataset=None):
     class_weights = torch.tensor(
         [len(dataset.labels) / (2 * n0), len(dataset.labels) / (2 * n1)],
         dtype=torch.float32,
+        device=device,
     )
 
     criterion = nn.CrossEntropyLoss(weight=class_weights)
@@ -78,6 +82,9 @@ def train(epochs, train_dataset=None):
 
         for batch_idx, (x_batch, y_batch) in enumerate(loader):
             optimizer.zero_grad()
+
+            x_batch = x_batch.to(device)
+            y_batch = y_batch.to(device)
 
             outputs = model(x_batch)
             loss = criterion(outputs, y_batch)
