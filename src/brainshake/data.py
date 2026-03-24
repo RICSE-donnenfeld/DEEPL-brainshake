@@ -1,13 +1,13 @@
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
+from torch.utils.data import Dataset, DataLoader, Subset
 
 import logging
+from sklearn.model_selection import KFold
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class EEGDataset(Dataset):
 
     def __init__(
         self,
-        data_dir: str | Path,
+        data_dir: Union[str, Path],
         patient_ids: Optional[Sequence[int]] = None,
         normalize: bool = False,
     ) -> None:
@@ -53,7 +53,7 @@ class EEGDataset(Dataset):
                 )
             self.data = (self.data - mean) / std
 
-    def _load_all_patients(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _load_all_patients(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         all_data = []
         all_labels = []
         all_patients = []
@@ -109,7 +109,7 @@ class EEGDataset(Dataset):
     def __len__(self) -> int:
         return len(self.labels)
 
-    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         x = torch.tensor(self.data[index], dtype=torch.float32)  # [21, 128]
         y = torch.tensor(self.labels[index], dtype=torch.long)  # scalar
         return x, y
@@ -123,6 +123,18 @@ class EEGDataset(Dataset):
         logger.info(f"  labels shape: {self.labels.shape}")
         logger.info(f"  class distribution: {class_distribution}")
         logger.info(f"  patients loaded: {sorted(set(self.patient_index.tolist()))}")
+
+    def k_fold(
+        self,
+        n_splits: int = 5,
+        shuffle: bool = True,
+        random_state: Optional[int] = None,
+    ):
+        kf = KFold(n_splits=n_splits, shuffle=shuffle, random_state=random_state)
+        for fold, (train_idx, val_idx) in enumerate(kf.split(self.data)):
+            train_set = Subset(self, train_idx)
+            val_set = Subset(self, val_idx)
+            yield fold, train_set, val_set
 
 
 def main():

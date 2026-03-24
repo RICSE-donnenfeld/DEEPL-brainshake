@@ -46,13 +46,16 @@ class SimpleEEGCNN(nn.Module):
         return x
 
 
-def train(epochs):
+def train(epochs, train_dataset=None):
     repo_root = Path(__file__).resolve().parents[2]
     data_dir = repo_root / "data" / "Epilepsy"
 
     logger.info(f"Using data directory: {data_dir}")
 
-    dataset = EEGDataset(data_dir=data_dir, patient_ids=[1, 2, 3], normalize=False)
+    if train_dataset is None:
+        dataset = EEGDataset(data_dir=data_dir, patient_ids=[1, 2, 3], normalize=False)
+    else:
+        dataset = train_dataset
     loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
     model = SimpleEEGCNN()
@@ -92,7 +95,9 @@ def train(epochs):
                     f"Loss: {loss.item():.4f}, Acc: {acc:.4f}"
                 )
 
-        logger.info(f"Epoch {epoch + 1} finished. Avg loss: {running_loss / len(loader):.4f}")
+        logger.info(
+            f"Epoch {epoch + 1} finished. Avg loss: {running_loss / len(loader):.4f}"
+        )
 
 
 def main():
@@ -105,6 +110,19 @@ def main():
     )
     parser.add_argument(
         "-v", "--verbose", action="count", default=0, help="Increase verbosity level"
+    )
+    parser.add_argument(
+        "-k",
+        "--kfolds",
+        type=int,
+        default=1,
+        help="Number of folds for cross-validation (default: 1)",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed for shuffle in K-fold (default: None)",
     )
     args = vars(parser.parse_args())
 
@@ -121,7 +139,16 @@ def main():
     logger.info(f"CNN module launched with args : {args}")
 
     if args["command"] == "train":
-        train(args["epochs"])
+        kfolds = args["kfolds"]
+        seed = args.get("seed", None)
+        if kfolds > 1:
+            for fold, train_ds, val_ds in EEGDataset(
+                data_dir=Path(__file__).resolve().parents[2] / "data" / "Epilepsy"
+            ).k_fold(n_splits=kfolds, shuffle=True, random_state=seed):
+                logger.info(f"Starting fold {fold + 1}/{kfolds}")
+                train(args["epochs"], train_dataset=train_ds)
+        else:
+            train(args["epochs"])
     else:
         logger.error(f"Unrecognized command {args['command']}")
 
