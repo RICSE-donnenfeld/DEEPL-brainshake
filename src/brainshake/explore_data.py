@@ -4,6 +4,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 matplotlib.use('TkAgg')
 
 
@@ -25,16 +29,16 @@ def load_patient(patient_id: int):
 def show_basic_info(patient_id: int):
     X, meta = load_patient(patient_id)
 
-    print(f"\n=== Patient chb{patient_id:02d} ===")
-    print("EEG shape:", X.shape)
-    print("Single window shape:", X[0].shape)
-    print("dtype:", X.dtype)
-    print("\nMetadata columns:", list(meta.columns))
-    print("\nClass distribution:")
-    print(meta["class"].value_counts().sort_index())
+    logger.info(f"\n=== Patient chb{patient_id:02d} ===")
+    logger.info(f"EEG shape: {X.shape}")
+    logger.info(f"Single window shape: {X[0].shape}")
+    logger.info(f"dtype: {X.dtype}")
+    logger.info(f"\nMetadata columns: {list(meta.columns)}")
+    logger.info("\nClass distribution:")
+    logger.info(f"{meta['class'].value_counts().sort_index()}")
 
-    print("\nFirst rows of metadata:")
-    print(meta.head())
+    logger.info("\nFirst rows of metadata:")
+    logger.info(f"\n{meta.head()}")
 
 
 def plot_window(patient_id: int, window_idx: int):
@@ -87,7 +91,7 @@ def summarize_all_patients():
     rows = []
 
     for patient_id in range(1, 25):
-        print(f"Loading chb{patient_id:02d}...")
+        logger.info(f"Loading chb{patient_id:02d}...")
         try:
             X, meta = load_patient(patient_id)
             class_counts = meta["class"].value_counts().to_dict()
@@ -99,11 +103,11 @@ def summarize_all_patients():
                 "n_seizure": class_counts.get(1, 0),
             })
         except Exception as e:
-            print(f"Could not load chb{patient_id:02d}: {e}")
+            logger.error(f"Could not load chb{patient_id:02d}: {e}")
 
     df = pd.DataFrame(rows)
-    print("\n=== Summary over all patients ===")
-    print(df)
+    logger.info("\n=== Summary over all patients ===")
+    logger.info(f"\n{df}")
 
     plt.figure(figsize=(12, 5))
     plt.bar(df["patient"], df["n_windows"])
@@ -111,7 +115,7 @@ def summarize_all_patients():
     plt.title("Number of windows per patient")
     plt.tight_layout()
     plt.savefig("windows_per_patient.png")
-    print("Saved windows_per_patient.png")
+    logger.info("Saved windows_per_patient.png")
     plt.close()
 
     plt.figure(figsize=(12, 5))
@@ -120,11 +124,12 @@ def summarize_all_patients():
     plt.title("Number of seizure windows per patient")
     plt.tight_layout()
     plt.savefig("seizures_per_patient.png")
-    print("Saved seizures_per_patient.png")
+    logger.info("Saved seizures_per_patient.png")
     plt.close()
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     show_basic_info(1)
     plot_window(patient_id=1, window_idx=0)
     compare_nonseizure_vs_seizure(patient_id=1)
