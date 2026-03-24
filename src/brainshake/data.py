@@ -110,8 +110,8 @@ class EEGDataset(Dataset):
         return len(self.labels)
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        x = torch.tensor(self.data[index], dtype=torch.float32)  # [21, 128]
-        y = torch.tensor(self.labels[index], dtype=torch.long)  # scalar
+        x = torch.from_numpy(self.data[index]).to(dtype=torch.float32)
+        y = torch.tensor(self.labels[index], dtype=torch.long)
         return x, y
 
     def summary(self) -> None:

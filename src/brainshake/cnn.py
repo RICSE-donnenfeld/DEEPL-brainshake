@@ -1,11 +1,13 @@
 from pathlib import Path
+import os
 
 import argparse
 import logging
+from typing import Optional, Union, cast
 
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 from .data import EEGDataset
 
@@ -47,7 +49,10 @@ class SimpleEEGCNN(nn.Module):
         return x
 
 
-def train(epochs, train_dataset=None):
+def train(
+    epochs: int,
+    train_dataset: Optional[Union[EEGDataset, Subset]] = None,
+) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -59,15 +64,30 @@ def train(epochs, train_dataset=None):
         dataset = EEGDataset(data_dir=data_dir, patient_ids=[1, 2, 3], normalize=False)
     else:
         dataset = train_dataset
-    loader = DataLoader(dataset, batch_size=32, shuffle=True)
+    cpu_count = os.cpu_count() or 1
+    num_workers = min(8, cpu_count)
+    loader = DataLoader(
+        dataset,
+        batch_size=32,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
 
     model = SimpleEEGCNN().to(device)
 
     # simple class weighting because seizure class is smaller
-    n0 = (dataset.labels == 0).sum()
-    n1 = (dataset.labels == 1).sum()
+    if isinstance(dataset, Subset):
+        base_labels = cast(EEGDataset, dataset.dataset).labels
+        subset_labels = base_labels[dataset.indices]
+    else:
+        subset_labels = cast(EEGDataset, dataset).labels
+
+    n0 = (subset_labels == 0).sum()
+    n1 = (subset_labels == 1).sum()
+    total_labels = len(subset_labels)
     class_weights = torch.tensor(
-        [len(dataset.labels) / (2 * n0), len(dataset.labels) / (2 * n1)],
+        [total_labels / (2 * n0), total_labels / (2 * n1)],
         dtype=torch.float32,
         device=device,
     )

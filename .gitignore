@@ -1,6 +1,8 @@
 data/Epilepsy/
 Epilepsy/
 
+slurm_io/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
