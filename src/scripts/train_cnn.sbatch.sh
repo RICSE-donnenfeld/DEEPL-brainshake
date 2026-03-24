@@ -12,11 +12,6 @@
 
 set -euo pipefail
 
-nvidia-smi
-
-cd /hhome/ricse04/brainshake
-
 source .venv/bin/activate
 
-python -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('GPU count:', torch.cuda.device_count())"
-python model_autoencoder.py --epochs 150 --k-folds 5 --seed 67
+python -m src.brainshake.cnn -c train --epochs 10 --kfolds 5 --seed 67 -vvv

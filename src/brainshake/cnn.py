@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 import os
 
@@ -5,6 +7,7 @@ import argparse
 import logging
 from typing import Optional, Union, cast
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Subset
@@ -12,6 +15,58 @@ from torch.utils.data import DataLoader, Subset
 from .data import EEGDataset
 
 logger = logging.getLogger(__name__)
+
+BATCH_SIZE = 32
+
+
+def _make_loader(
+    dataset: Union[EEGDataset, Subset], shuffle: bool, num_workers: int
+) -> DataLoader:
+    return DataLoader(
+        dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+
+
+def _extract_labels(dataset: Union[EEGDataset, Subset]) -> np.ndarray:
+    if isinstance(dataset, Subset):
+        if dataset.indices is None:
+            raise ValueError("Subset indices must be provided")
+        base_labels = cast(EEGDataset, dataset.dataset).labels
+        return base_labels[dataset.indices]
+    return cast(EEGDataset, dataset).labels
+
+
+def _evaluate(
+    model: SimpleEEGCNN,
+    loader: DataLoader,
+    criterion: nn.CrossEntropyLoss,
+    device: torch.device,
+) -> tuple[float, float]:
+    model.eval()
+    total_loss = 0.0
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for x_batch, y_batch in loader:
+            x_batch = x_batch.to(device, non_blocking=True)
+            y_batch = y_batch.to(device, non_blocking=True)
+
+            outputs = model(x_batch)
+            loss = criterion(outputs, y_batch)
+
+            total_loss += loss.item() * x_batch.size(0)
+            preds = torch.argmax(outputs, dim=1)
+            correct += (preds == y_batch).sum().item()
+            total += x_batch.size(0)
+
+    model.train()
+    if total == 0:
+        return 0.0, 0.0
+    return total_loss / total, correct / total
 
 
 class SimpleEEGCNN(nn.Module):
@@ -52,6 +107,7 @@ class SimpleEEGCNN(nn.Module):
 def train(
     epochs: int,
     train_dataset: Optional[Union[EEGDataset, Subset]] = None,
+    val_dataset: Optional[Union[EEGDataset, Subset]] = None,
 ) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -66,23 +122,17 @@ def train(
         dataset = train_dataset
     cpu_count = os.cpu_count() or 1
     num_workers = min(8, cpu_count)
-    loader = DataLoader(
-        dataset,
-        batch_size=32,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True,
+    loader = _make_loader(dataset, shuffle=True, num_workers=num_workers)
+    val_loader = (
+        _make_loader(val_dataset, shuffle=False, num_workers=num_workers)
+        if val_dataset is not None
+        else None
     )
 
     model = SimpleEEGCNN().to(device)
 
     # simple class weighting because seizure class is smaller
-    if isinstance(dataset, Subset):
-        base_labels = cast(EEGDataset, dataset.dataset).labels
-        subset_labels = base_labels[dataset.indices]
-    else:
-        subset_labels = cast(EEGDataset, dataset).labels
-
+    subset_labels = _extract_labels(dataset)
     n0 = (subset_labels == 0).sum()
     n1 = (subset_labels == 1).sum()
     total_labels = len(subset_labels)
@@ -125,9 +175,15 @@ def train(
         logger.info(
             f"Epoch {epoch + 1} finished. Avg loss: {running_loss / len(loader):.4f}"
         )
+        if val_loader is not None:
+            val_loss, val_acc = _evaluate(model, val_loader, criterion, device)
+            logger.info(
+                f"Epoch {epoch + 1} validation: Loss {val_loss:.4f}, Acc {val_acc:.4f}"
+            )
 
 
 def main():
+    print("Starting...")
     parser = argparse.ArgumentParser(description="Brainshake")
     parser.add_argument(
         "-c", "--command", type=str, help="Command", required=False, default="train"
@@ -173,7 +229,11 @@ def main():
                 data_dir=Path(__file__).resolve().parents[2] / "data" / "Epilepsy"
             ).k_fold(n_splits=kfolds, shuffle=True, random_state=seed):
                 logger.info(f"Starting fold {fold + 1}/{kfolds}")
-                train(args["epochs"], train_dataset=train_ds)
+                train(
+                    args["epochs"],
+                    train_dataset=train_ds,
+                    val_dataset=val_ds,
+                )
         else:
             train(args["epochs"])
     else:

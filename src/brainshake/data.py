@@ -4,10 +4,9 @@ from typing import Optional, Sequence, Tuple, Union
 import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data import Dataset, DataLoader, Subset
+from torch.utils.data import Dataset, Subset
 
 import logging
-from sklearn.model_selection import KFold
 
 logger = logging.getLogger(__name__)
 
@@ -130,10 +129,43 @@ class EEGDataset(Dataset):
         shuffle: bool = True,
         random_state: Optional[int] = None,
     ):
-        kf = KFold(n_splits=n_splits, shuffle=shuffle, random_state=random_state)
-        for fold, (train_idx, val_idx) in enumerate(kf.split(self.data)):
-            train_set = Subset(self, train_idx)
-            val_set = Subset(self, val_idx)
+        """Patient-wise k-fold split with optional reproducible shuffle."""
+        unique_patients = np.unique(self.patient_index)
+        if n_splits < 2:
+            raise ValueError("n_splits must be at least 2")
+        if n_splits > len(unique_patients):
+            raise ValueError("n_splits cannot exceed unique patient count")
+
+        rng = np.random.default_rng(random_state)
+        patient_order = (
+            rng.permutation(unique_patients)
+            if shuffle
+            else unique_patients.copy()
+        )
+
+        patient_indices = {
+            patient: np.flatnonzero(self.patient_index == patient)
+            for patient in unique_patients
+        }
+
+        folds: list[list[int]] = [[] for _ in range(n_splits)]
+        for idx, patient in enumerate(patient_order):
+            folds[idx % n_splits].append(patient)
+
+        for fold, val_patients in enumerate(folds):
+            val_indices = np.concatenate(
+                [patient_indices[patient] for patient in val_patients]
+            )
+            train_indices = np.concatenate(
+                [
+                    patient_indices[patient]
+                    for patient in unique_patients
+                    if patient not in val_patients
+                ]
+            )
+
+            train_set = Subset(self, train_indices.tolist())
+            val_set = Subset(self, val_indices.tolist())
             yield fold, train_set, val_set
 
 
@@ -149,13 +181,6 @@ def main():
     x, y = dataset[0]
     logger.info(f"Single sample shape: {x.shape}")
     logger.info(f"Single label: {y.item()}")
-
-    loader = DataLoader(dataset, batch_size=8, shuffle=True)
-
-    x_batch, y_batch = next(iter(loader))
-    logger.info(f"Batch sample shape: {x_batch.shape}")
-    logger.info(f"Batch label shape: {y_batch.shape}")
-    logger.info(f"Batch labels: {y_batch}")
 
 
 if __name__ == "__main__":
