@@ -1,0 +1,203 @@
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{float}
+\usepackage{subcaption}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{caption}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{siunitx}
+\setlength{\emergencystretch}{3em}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+  citecolor=blue
+}
+
+% ---------- Code listing style ----------
+\lstdefinestyle{mystyle}{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  columns=fullflexible,
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray},
+  stringstyle=\color{teal},
+  showstringspaces=false
+}
+\lstset{style=mystyle}
+
+\title{\textbf{Deep Learning for the Detection of \textit{Seizures}\\
+in Electro-Encephalogram Signals}\\[4pt]
+\large Project-Based Learning Report}
+\date{\today}
+
+\begin{document}
+\begin{titlepage}
+  \centering
+  \vspace*{1cm}
+  {\LARGE\textbf{Deep Learning for the Detection of \textit{Seizures in Electro-Encephalogram Signals\par}}}
+  \vspace{0.5cm}
+  {\large Project Report\par}
+  \vspace{1.5cm}
+  \includegraphics[width=0.7\linewidth]{figures/cover.png}\\[1cm]
+  \textit{Find a nice cover}
+  \vfill
+  \begin{tabular}{rl}
+    Rubén Alba & NIU 1786494 \\
+    Rohit Ranbawale & NIU 1744008 \\
+    Michael Rienessl & NIU 1699828 \\
+    Théotime Donnenfeld & NIU 1786565 \\
+  \end{tabular}
+  \vspace{1cm}\par
+  Universitat Autònoma de Barcelona (UAB)\\
+  \textbf{Course: Deep Learning}
+  \vspace{0.5cm}\par
+  \today
+\end{titlepage}
+\newpage
+
+\begin{abstract}
+\noindent
+Blabla abstract
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section*{Glossary}
+\addcontentsline{toc}{section}{Glossary}
+\label{sec:glossary}
+
+\begin{description}
+  \item[CNN] Convolutional neural network. Supervised patch-level classifier (healthy vs.\ bacteria).
+  \item[CV] Cross-validation. Here: 5-fold patient-level CV (splits by patient, not by patch).
+  \item[F1] F1 score. Harmonic mean of precision and recall: $2 \cdot \mathrm{precision} \cdot \mathrm{recall} / (\mathrm{precision} + \mathrm{recall})$.
+  \item[FPR] False positive rate. Proportion of true negatives incorrectly predicted positive; $\mathrm{FP}/(\mathrm{TN}+\mathrm{FP})$.
+  \item[Patient-level] Aggregation of data belonging to the same patient.
+  \item[Precision] Among predicted positives, the fraction that are truly positive; $\mathrm{TP}/(\mathrm{TP}+\mathrm{FP})$.
+  \item[Recall] Among true positives, the fraction correctly predicted positive; $\mathrm{TP}/(\mathrm{TP}+\mathrm{FN})$. Syn.\ sensitivity.
+  \item[Specificity] Among true negatives, the fraction correctly predicted negative; $\mathrm{TN}/(\mathrm{TN}+\mathrm{FP})$.
+  \item[TPR] True positive rate. Same as recall; $\mathrm{TP}/(\mathrm{TP}+\mathrm{FN})$.
+\end{description}
+
+\newpage
+
+% ==========================================================
+\section{Introduction}
+\label{sec:intro}
+
+Introduction to seizure detection
+
+% ==========================================================
+\section{Dataset Description}
+\label{sec:dataset}
+
+
+% ==========================================================
+\section{Methodology}
+\label{sec:methodology}
+
+\subsection{Pipeline overview}
+
+
+\subsection{Preprocessing}
+
+Reusing existing Preprocessing not adding anything currently.
+
+\subsection{Approach 1: Machine Learning Classifier}
+
+\subsection{Approach 2: CNN classifier}
+
+
+% ==========================================================
+\section{Implementation Details}
+\label{sec:implementation}
+
+\subsection{Development iterations}
+
+% ==========================================================
+\section{Experimental Design}
+\label{sec:experiments}
+
+
+\subsection{Hyperparameters}
+
+% ==========================================================
+\section{Results}
+\label{sec:results}
+
+
+% ==========================================================
+\section{Discussion}
+\label{sec:discussion}
+
+
+% ==========================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+
+
+\newpage
+
+% ==========================================================
+\section*{References}
+\addcontentsline{toc}{section}{References}
+\begin{enumerate}
+  \item Ref1
+\end{enumerate}
+
+% ==========================================================
+\appendix
+
+\section{Code extracts}
+\label{app:code}
+
+\begin{lstlisting}[language=Python, caption={CNN Model Used},label=lst:baseline_cnn]
+  class SimpleEEGCNN(nn.Module):
+      def __init__(self, in_channels: int = 21, n_classes: int = 2) -> None:
+          super().__init__()
+
+          self.features = nn.Sequential(
+              nn.Conv1d(
+                  in_channels=in_channels, out_channels=32, kernel_size=5, padding=2
+              ),
+              nn.BatchNorm1d(32),
+              nn.ReLU(),
+              nn.MaxPool1d(kernel_size=2),
+              nn.Conv1d(in_channels=32, out_channels=64, kernel_size=5, padding=2),
+              nn.BatchNorm1d(64),
+              nn.ReLU(),
+              nn.MaxPool1d(kernel_size=2),
+              nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
+              nn.BatchNorm1d(128),
+              nn.ReLU(),
+              nn.MaxPool1d(kernel_size=2),
+          )
+
+          self.classifier = nn.Sequential(
+              nn.Flatten(),
+              nn.Linear(128 * 16, 256),
+              nn.ReLU(),
+              nn.Dropout(0.3),
+              nn.Linear(256, n_classes),
+          )
+
+      def forward(self, x: torch.Tensor) -> torch.Tensor:
+          x = self.features(x)
+          x = self.classifier(x)
+          return x
+\end{lstlisting}
+
+
+\end{document}

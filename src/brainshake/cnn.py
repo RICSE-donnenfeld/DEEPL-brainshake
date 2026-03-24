@@ -69,6 +69,24 @@ def _evaluate(
     return total_loss / total, correct / total
 
 
+def _save_checkpoint(
+    model: SimpleEEGCNN,
+    optimizer: torch.optim.Optimizer,
+    path: Path,
+    epoch: int,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {
+            "epoch": epoch,
+            "model_state": model.state_dict(),
+            "optimizer_state": optimizer.state_dict(),
+        },
+        path,
+    )
+    logger.info(f"Saved checkpoint to {path}")
+
+
 class SimpleEEGCNN(nn.Module):
     def __init__(self, in_channels: int = 21, n_classes: int = 2) -> None:
         super().__init__()
@@ -108,6 +126,8 @@ def train(
     epochs: int,
     train_dataset: Optional[Union[EEGDataset, Subset]] = None,
     val_dataset: Optional[Union[EEGDataset, Subset]] = None,
+    model_path: Optional[Path] = None,
+    resume: bool = False,
 ) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -145,9 +165,19 @@ def train(
     criterion = nn.CrossEntropyLoss(weight=class_weights)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
+    start_epoch = 0
+    if resume and model_path is not None and model_path.exists():
+        checkpoint = torch.load(model_path, map_location=device)
+        model.load_state_dict(checkpoint.get("model_state", {}))
+        optimizer.load_state_dict(checkpoint.get("optimizer_state", {}))
+        start_epoch = checkpoint.get("epoch", 0)
+        logger.info(
+            f"Resuming training from {model_path} (epoch {start_epoch})"
+        )
+
     model.train()
 
-    for epoch in range(epochs):
+    for epoch in range(start_epoch, start_epoch + epochs):
         running_loss = 0.0
 
         for batch_idx, (x_batch, y_batch) in enumerate(loader):
@@ -172,14 +202,17 @@ def train(
                     f"Loss: {loss.item():.4f}, Acc: {acc:.4f}"
                 )
 
+        current_epoch = epoch + 1
         logger.info(
-            f"Epoch {epoch + 1} finished. Avg loss: {running_loss / len(loader):.4f}"
+            f"Epoch {current_epoch} finished. Avg loss: {running_loss / len(loader):.4f}"
         )
         if val_loader is not None:
             val_loss, val_acc = _evaluate(model, val_loader, criterion, device)
             logger.info(
-                f"Epoch {epoch + 1} validation: Loss {val_loss:.4f}, Acc {val_acc:.4f}"
+                f"Epoch {current_epoch} validation: Loss {val_loss:.4f}, Acc {val_acc:.4f}"
             )
+        if model_path is not None:
+            _save_checkpoint(model, optimizer, model_path, current_epoch)
 
 
 def main():
@@ -207,6 +240,17 @@ def main():
         default=None,
         help="Random seed for shuffle in K-fold (default: None)",
     )
+    parser.add_argument(
+        "--model-path",
+        type=str,
+        default=None,
+        help="Path to save/load checkpoints",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume training from checkpoint at --model-path if it exists",
+    )
     args = vars(parser.parse_args())
 
     log_level = (
@@ -224,18 +268,31 @@ def main():
     if args["command"] == "train":
         kfolds = args["kfolds"]
         seed = args.get("seed", None)
+        model_path_arg = args.get("model_path")
+        base_model_path = Path(model_path_arg) if model_path_arg else None
         if kfolds > 1:
             for fold, train_ds, val_ds in EEGDataset(
                 data_dir=Path(__file__).resolve().parents[2] / "data" / "Epilepsy"
             ).k_fold(n_splits=kfolds, shuffle=True, random_state=seed):
                 logger.info(f"Starting fold {fold + 1}/{kfolds}")
+                fold_model_path = None
+                if base_model_path is not None:
+                    fold_model_path = base_model_path.with_name(
+                        f"{base_model_path.stem}_fold{fold + 1}{base_model_path.suffix}"
+                    )
                 train(
                     args["epochs"],
                     train_dataset=train_ds,
                     val_dataset=val_ds,
+                    model_path=fold_model_path,
+                    resume=args["resume"],
                 )
         else:
-            train(args["epochs"])
+            train(
+                args["epochs"],
+                model_path=base_model_path,
+                resume=args["resume"],
+            )
     else:
         logger.error(f"Unrecognized command {args['command']}")
 
