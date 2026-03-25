@@ -3,7 +3,7 @@
 
 \usepackage[margin=2.4cm]{geometry}
 \usepackage{graphicx}
-\graphicspath{{../out/plots/}{../out/data_analyze/}{../out/mermaid/}{figures/}}
+\graphicspath{{out/plots/}{../out/plots/}{out/data_analyze/}{../out/data_analyze/}{out/mermaid/}{../out/mermaid/}{figures/}}
 \usepackage{amsmath, amssymb}
 \usepackage{booktabs}
 \usepackage{multirow}
@@ -23,6 +23,7 @@
   urlcolor=blue,
   citecolor=blue
 }
+\hypersetup{pageanchor=false}
 
 % ---------- Code listing style ----------
 \lstdefinestyle{mystyle}{
@@ -71,10 +72,11 @@ in Electro-Encephalogram Signals}\\[4pt]
 This report investigates the automated detection of epileptic seizures in EEG signals using three approaches:
 a basic threshold-based algorithm operating on raw signal statistics, a random forest trained on handcrafted time-domain features, and a one-dimensional convolutional neural network (CNN) trained on raw signal windows.
 EEG recordings from 24 patients are segmented into 1\,s windows, totalling \num{571905} samples (\num{3480} seizure windows) and evaluated under 5-fold patient-level cross-validation.
-The CNN achieves higher accuracy and F1 score than the random forest, demonstrating the advantage of end-to-end deep learning for seizure detection.
+The CNN achieves higher accuracy than the random forest, demonstrating the advantage of end-to-end deep learning for seizure detection.
 \end{abstract}
 
 \tableofcontents
+\hypersetup{pageanchor=true}
 \newpage
 
 \section*{Glossary}
@@ -130,12 +132,6 @@ This bar chart shows the standard deviation and range for each patient, illustra
 The line plot summarizes average statistics (mean, std, min, max, range) for seizure vs.
 non-seizure windows, highlighting how dispersion metrics (standard deviation and range) consistently exceed their non-seizure counterparts, supporting the use of variability-sensitive features and thresholds.
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.8\linewidth]{results_table.png}
-\caption{Data analysis per patient}
-\label{fig:results_table}
-\end{figure}
 
 % ==========================================================
 \section{Methodology}
@@ -148,6 +144,8 @@ All models use patient-level cross-validation.
 For the CNN pipeline, we normalize each EEG window by subtracting its mean and dividing by its standard deviation before model input.
 For the threshold and random forest pipelines, we compute raw time-domain features (mean, standard deviation, range, min, max) on unnormalized windows.
 
+\subsection{Train test and validation}
+
 \subsection{Approach 1: Threshold Classifier}
 We implement a simple threshold-based classifier that flags a window as seizure if its standard deviation or range exceeds fold-specific thresholds.
 Thresholds are optimized via grid search on each training fold.
@@ -156,8 +154,8 @@ Thresholds are optimized via grid search on each training fold.
 We compute the mean and standard deviation of each window as features and train a random forest with 100 trees (default hyperparameters) to classify seizure vs.\ non-seizure windows.
 
 \subsection{Approach 3: CNN Classifier}
-We implement a one-dimensional CNN (Listing \ref{lst:baseline_cnn}) consisting of three convolutional–ReLU–maxpool blocks followed by fully connected layers and dropout ($p=0.3$).
-The model is trained with Adam (learning rate $10^{-3}$) for 50 epochs.
+We implement a one-dimensional CNN consisting of three convolutional–ReLU–maxpool blocks followed by fully connected layers and dropout ($p=0.3$).
+The model is trained with Adam (learning rate $10^{-3}$) for 50 epochs and class-weighted cross-entropy to offset label imbalance.
 
 \begin{figure}[H]
 \centering
@@ -180,7 +178,7 @@ The model is trained with Adam (learning rate $10^{-3}$) for 50 epochs.
 \label{fig:pipeline_diagrams}
 \end{figure}
 
-Figure~\ref{fig:pipeline_diagrams} highlights how each approach processes the raw EEG windows: the threshold baseline relies on hard limits, the random forest vectorizes handcrafted features, and the CNN learns representations end-to-end from normalized time series.
+These diagrams highlight how each approach processes the raw EEG windows: the threshold baseline relies on hard limits, the random forest vectorizes handcrafted features, and the CNN learns representations end-to-end from normalized time series.
 
 
 % ==========================================================
@@ -227,10 +225,6 @@ Dropout & -- & 0.3 \\
 % ==========================================================
 \section{Results}
 \label{sec:results}
-We summarize cross-validation performance for the CNN in Figs.~\ref{fig:accuracy_by_fold} and \ref{fig:avg_accuracy}, and compare model accuracy across the threshold, random forest, and CNN pipelines in Fig.~\ref{fig:results_table}.
-These plots are based on the latest exported metrics in `out/`.
-The threshold classifier baseline achieves an average accuracy of \num{0.766} across folds, while the random forest and CNN improve upon it.
-
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.8\linewidth]{accuracy_by_fold.png}
@@ -250,10 +244,14 @@ Per-fold accuracy shows how the CNN stays stable above 80\% in most folds and av
 The average accuracy plot aggregates the fold results, making it easy to compare the three pipelines—threshold, random forest, and CNN—and confirms that the CNN leads the pack, followed by the forest.
 
 
+\noindent \textbf{Summary.} The CNN accuracy per fold and average accuracy charts illustrate how the model generalizes steadily above 80\% across patients, while the performance comparison table ranks the threshold, random forest, and CNN pipelines to show the deep model leading the pack.
+These plots are based on the latest exported metrics in `out/`.
+The threshold classifier baseline achieves an average accuracy of \num{0.766} across folds, while the random forest and CNN improve upon it.
+
 
 % ==========================================================
 \section{Discussion}
-Our results show that the CNN consistently outperforms the random forest across accuracy, precision, recall, and F1 score, with lower variability across folds.
+Our results show that the CNN consistently outperforms the random forest in accuracy with lower variability across folds.
 The deep model effectively captures temporal patterns in EEG signals that simple features cannot represent.
 \label{sec:discussion}
 
@@ -284,7 +282,7 @@ Future work will explore multichannel spatial information and longer temporal co
 \section{Code extracts}
 \label{app:code}
 
-\begin{lstlisting}[language=Python, caption={CNN Model Used}]
+\begin{lstlisting}[language=Python, caption={CNN Model Used}, label=lst:baseline_cnn]
   class SimpleEEGCNN(nn.Module):
       def __init__(self, in_channels: int = 21, n_classes: int = 2) -> None:
           super().__init__()
@@ -319,7 +317,7 @@ Future work will explore multichannel spatial information and longer temporal co
           x = self.classifier(x)
           return x
 \end{lstlisting}
-\label{lst:baseline_cnn}
+The listing details the architecture described above, including the three convolutional blocks and final classifier layer.
 
 
 \end{document}
