@@ -2,14 +2,29 @@
   "folds": [
     {
       "fold": 0,
-      "accuracy": 0.6123675297716595,
+      "accuracy": 0.7974059768245578,
       "saved_model": "out/models/randomforest/model_fold_00.joblib"
     },
     {
       "fold": 1,
-      "accuracy": 0.9038033849749331,
+      "accuracy": 0.6833803657053709,
       "saved_model": "out/models/randomforest/model_fold_01.joblib"
+    },
+    {
+      "fold": 2,
+      "accuracy": 0.6770774571490562,
+      "saved_model": "out/models/randomforest/model_fold_02.joblib"
+    },
+    {
+      "fold": 3,
+      "accuracy": 0.6846466816964915,
+      "saved_model": "out/models/randomforest/model_fold_03.joblib"
+    },
+    {
+      "fold": 4,
+      "accuracy": 0.6074321899194995,
+      "saved_model": "out/models/randomforest/model_fold_04.joblib"
     }
   ],
-  "average_accuracy": 0.7580854573732962
+  "average_accuracy": 0.6899885342589951
 }

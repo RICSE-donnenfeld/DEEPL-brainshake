@@ -2,20 +2,44 @@
   "folds": [
     {
       "fold": 0,
-      "std_threshold": 65.52813474768283,
-      "range_threshold": 281.70819274271014,
-      "min_threshold": -141.9427511420593,
-      "max_threshold": 139.76544160065086,
-      "accuracy": 0.5717251174478313
+      "std_threshold": 64.8496529147755,
+      "range_threshold": 305.45184962478703,
+      "min_threshold": -150.11304024773312,
+      "max_threshold": 155.3388093770539,
+      "accuracy": 0.8078715186013418
     },
     {
       "fold": 1,
-      "std_threshold": 82.9579806210664,
-      "range_threshold": 408.99599208553514,
-      "min_threshold": -204.26661949671404,
-      "max_threshold": 204.7293725888211,
-      "accuracy": 0.9609483960948396
+      "std_threshold": 65.54932632180692,
+      "range_threshold": 309.16192251862003,
+      "min_threshold": -151.20045570384633,
+      "max_threshold": 157.96146681477373,
+      "accuracy": 0.7458416500332667
+    },
+    {
+      "fold": 2,
+      "std_threshold": 59.195153771893594,
+      "range_threshold": 275.4127815001715,
+      "min_threshold": -134.9109909327609,
+      "max_threshold": 140.50179056741052,
+      "accuracy": 0.7976567585159471
+    },
+    {
+      "fold": 3,
+      "std_threshold": 64.18794256053084,
+      "range_threshold": 300.6876115765572,
+      "min_threshold": -146.99997266128253,
+      "max_threshold": 153.6876389152747,
+      "accuracy": 0.7812455967310131
+    },
+    {
+      "fold": 4,
+      "std_threshold": 76.37406975299123,
+      "range_threshold": 354.6648933702564,
+      "min_threshold": -173.62473419974236,
+      "max_threshold": 181.04015917051396,
+      "accuracy": 0.6418115161769984
     }
   ],
-  "average_accuracy": 0.7663367567713355
+  "average_accuracy": 0.7548854080117134
 }

@@ -1,0 +1,14 @@
+%% Random forest pipeline
+flowchart TB
+    data["CHB-MIT EEG windows"]
+    dataset["EEGDataset (normalize=False) per patient"]
+    extract["extract_basic_features → mean/std/min/max/range,\npeak_to_peak, std_range_ratio, range_std_sum"]
+    vector["Feature vector ordering preserved"]
+    classifier["RandomForestClassifier (n_estimators=100,\nclass_weight='balanced', depth=None)"]
+    evaluate["Patient-wise k-fold evaluation & accuracy metrics"]
+
+    data --> dataset
+    dataset --> extract
+    extract --> vector
+    vector --> classifier
+    classifier --> evaluate

@@ -11,6 +11,8 @@ __pycache__/
 # C extensions
 *.so
 
+out/models/randomforest/*
+
 # Distribution / packaging
 .Python
 build/

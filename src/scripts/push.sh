@@ -17,5 +17,6 @@ rsync -avz \
   --exclude ".pytest_cache" \
   --exclude ".mypy_cache" \
   --exclude ".gitignore" \
+  --exclude "out/" \
   -e "ssh -p 55022" \
   . ricse04@158.109.75.52:/hhome/ricse04/brainshake/

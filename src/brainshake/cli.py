@@ -73,7 +73,7 @@ COMPILE_ARGS: Mapping[str, tuple[str, ...]] = {
         "-c",
         "train",
         "-e",
-        "30",
+        "2",
         "--kfolds",
         "5",
         "--seed",
@@ -81,8 +81,6 @@ COMPILE_ARGS: Mapping[str, tuple[str, ...]] = {
         "-vvv",
     ),
     "evaluate-cnn": (
-        "--epochs",
-        "20",
         "--n-splits",
         "5",
         "--random-state",

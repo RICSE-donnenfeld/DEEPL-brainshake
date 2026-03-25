@@ -72,14 +72,13 @@ def create_simple_comparison(summary: Dict[str, Any]) -> None:
         edgecolor="black",
     )
     ax_std.set_xticks(x)
-    ax_std.set_xticklabels(patients)
+    ax_std.set_xticklabels(patients, rotation=90, ha="center")
     ax_std.set_xlabel("Patient")
     ax_std.set_ylabel("Standard Deviation")
     ax_std.set_title("Non-Seizure vs Seizure Std")
     ax_std.legend(fontsize=10)
     ax_std.grid(True, alpha=0.3)
-    _annotate_bars(ax_std, bars_ns)
-    _annotate_bars(ax_std, bars_sz)
+    # Annotation removed to reduce clutter for 24 patients
 
     ax_range = axes[1]
     bars_ns = ax_range.bar(
@@ -99,13 +98,12 @@ def create_simple_comparison(summary: Dict[str, Any]) -> None:
         edgecolor="black",
     )
     ax_range.set_xticks(x)
-    ax_range.set_xticklabels(patients)
+    ax_range.set_xticklabels(patients, rotation=90, ha="center")
     ax_range.set_xlabel("Patient")
     ax_range.set_ylabel("Range")
     ax_range.set_title("Non-Seizure vs Seizure Range")
     ax_range.grid(True, alpha=0.3)
-    _annotate_bars(ax_range, bars_ns)
-    _annotate_bars(ax_range, bars_sz)
+    # Annotation removed to reduce clutter for 24 patients
 
     fig.suptitle(
         "Seizure vs Non-Seizure Variability",

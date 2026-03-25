@@ -1,0 +1,14 @@
+%% Threshold baseline pipeline
+flowchart TB
+    data["CHB-MIT EEG windows"]
+    dataset["EEGDataset (normalize=False) per patient"]
+    extract["extract_basic_features → mean/std/min/max/range"]
+    thresholds["compute_thresholds per fold\n(std/range/min/max averages)"]
+    classifier["ThresholdClassifier rule-based\n(std ≥ thr, range ≥ thr, optional min/max bounds)"]
+    evaluate["Patient-wise k-fold evaluation"]
+
+    data --> dataset
+    dataset --> extract
+    extract --> thresholds
+    thresholds --> classifier
+    classifier --> evaluate

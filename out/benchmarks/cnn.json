@@ -2,16 +2,34 @@
   "folds": [
     {
       "fold": 0,
-      "loss": 4.089532624458588,
-      "accuracy": 0.654320987654321,
-      "saved_model": "out/models/cnn/cnn_fold_00.pt"
+      "loss": 1.3006925975391503,
+      "accuracy": 0.9308152063427526,
+      "loaded_model": "out/models/cnn/cnn_fold_00.pt"
     },
     {
       "fold": 1,
-      "loss": 0.1582290352166091,
-      "accuracy": 0.9517509140940104,
-      "saved_model": "out/models/cnn/cnn_fold_01.pt"
+      "loss": 0.10434841128267815,
+      "accuracy": 0.9613416844471976,
+      "loaded_model": "out/models/cnn/cnn_fold_01.pt"
+    },
+    {
+      "fold": 2,
+      "loss": 0.08086835161174402,
+      "accuracy": 0.9777392059014971,
+      "loaded_model": "out/models/cnn/cnn_fold_02.pt"
+    },
+    {
+      "fold": 3,
+      "loss": 0.10737967902964227,
+      "accuracy": 0.9678737494716078,
+      "loaded_model": "out/models/cnn/cnn_fold_03.pt"
+    },
+    {
+      "fold": 4,
+      "loss": 0.09339426336427271,
+      "accuracy": 0.9683446136491822,
+      "loaded_model": "out/models/cnn/cnn_fold_04.pt"
     }
   ],
-  "average_accuracy": 0.8030359508741657
+  "average_accuracy": 0.9612228919624475
 }
