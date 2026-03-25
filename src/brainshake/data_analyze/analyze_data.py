@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 from ..data_handling.extract_features import FeatureDict, extract_basic_features
 
 DATA_DIR: Path = Path("data/Epilepsy")
-OUTPUT_DIR: Path = Path("out")
+OUTPUT_DIR: Path = Path("out/data_analyze")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 
@@ -158,7 +158,8 @@ def main() -> Dict[str, Any]:
     print(f"Patients: {available[:5]}... (showing first 5)")
 
     # Analyze first 3 patients for simplicity
-    analyze_patients = available[:3]
+    # analyze_patients = available[:3]
+    analyze_patients = available
     print(f"\nAnalyzing patients: {analyze_patients}")
 
     # Collect all metrics

@@ -74,11 +74,13 @@ def evaluate_dataset(
         except ValueError:
             display_path = model_path
         print(f"Fold {fold}: accuracy={accuracy:.4f}, saved_model={display_path}")
-        results["folds"].append({
-            "fold": fold,
-            "accuracy": accuracy,
-            "saved_model": str(display_path),
-        })
+        results["folds"].append(
+            {
+                "fold": fold,
+                "accuracy": accuracy,
+                "saved_model": str(display_path),
+            }
+        )
 
     average = sum(accuracies) / len(accuracies) if accuracies else 0.0
     results["average_accuracy"] = float(average)
