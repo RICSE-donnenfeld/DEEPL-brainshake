@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 32
 
+REPO_ROOT = Path(__file__).resolve().parents[4]
+DEFAULT_DATA_DIR = REPO_ROOT / "data" / "Epilepsy"
+DEFAULT_MODEL_DIR = REPO_ROOT / "out" / "models" / "cnn"
+
 
 def _make_loader(
     dataset: Union[EEGDataset, Subset], shuffle: bool, num_workers: int
@@ -131,13 +135,10 @@ def train(
 ) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    repo_root = Path(__file__).resolve().parents[3]
-    data_dir = repo_root / "data" / "Epilepsy"
-
-    logger.info(f"Using data directory: {data_dir}")
+    logger.info(f"Using data directory: {DEFAULT_DATA_DIR}")
 
     if train_dataset is None:
-        dataset = EEGDataset(data_dir=data_dir, patient_ids=[1, 2, 3], normalize=False)
+        dataset = EEGDataset(data_dir=DEFAULT_DATA_DIR, normalize=False)
     else:
         dataset = train_dataset
     cpu_count = os.cpu_count() or 1
@@ -268,19 +269,19 @@ def main():
         seed = args.get("seed", None)
         model_path_arg = args.get("model_path")
         base_model_path = Path(model_path_arg) if model_path_arg else None
-        repo_root = Path(__file__).resolve().parents[3]
-        data_dir = repo_root / "data" / "Epilepsy"
+        DEFAULT_MODEL_DIR.mkdir(parents=True, exist_ok=True)
         if kfolds > 1:
-            dataset = EEGDataset(data_dir=data_dir)
+            dataset = EEGDataset(data_dir=DEFAULT_DATA_DIR)
             for fold, train_ds, val_ds in dataset.k_fold(
                 n_splits=kfolds, shuffle=True, random_state=seed
             ):
                 logger.info(f"Starting fold {fold + 1}/{kfolds}")
-                fold_model_path = None
                 if base_model_path is not None:
                     fold_model_path = base_model_path.with_name(
                         f"{base_model_path.stem}_fold{fold + 1}{base_model_path.suffix}"
                     )
+                else:
+                    fold_model_path = DEFAULT_MODEL_DIR / f"cnn_fold_{fold + 1:02d}.pt"
                 train(
                     args["epochs"],
                     train_dataset=train_ds,
@@ -289,9 +290,10 @@ def main():
                     resume=args["resume"],
                 )
         else:
+            target_path = base_model_path or (DEFAULT_MODEL_DIR / "cnn_final.pt")
             train(
                 args["epochs"],
-                model_path=base_model_path,
+                model_path=target_path,
                 resume=args["resume"],
             )
     else:

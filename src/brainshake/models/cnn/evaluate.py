@@ -6,7 +6,7 @@ import argparse
 import json
 import logging
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Sequence
 
 import numpy as np
 import torch
@@ -21,15 +21,25 @@ DEFAULT_MODEL_DIR = REPO_ROOT / "out" / "models" / "cnn"
 DEFAULT_DATA_DIR = REPO_ROOT / "data" / "Epilepsy"
 
 
+def _persist_results(results: dict, accuracies: Sequence[float]) -> None:
+    avg = np.mean(accuracies) if accuracies else 0.0
+    results["average_accuracy"] = float(avg)
+    print(f"K-fold average accuracy: {avg:.4f}")
+    bench_dir = REPO_ROOT / "out" / "benchmarks"
+    bench_dir.mkdir(parents=True, exist_ok=True)
+    out_path = bench_dir / "cnn.json"
+    with open(out_path, "w") as f:
+        json.dump(results, f, indent=2)
+    print(f"Saved benchmarks to {out_path.relative_to(REPO_ROOT)}")
+
+
 def evaluate_dataset(
-    data_dir: Path,
+    dataset: EEGDataset,
     model_dir: Path,
     n_splits: int = 5,
     epochs: int = 10,
     random_state: int = 42,
-    patient_ids: Optional[Sequence[int]] = None,
 ) -> None:
-    dataset = EEGDataset(data_dir=data_dir, patient_ids=patient_ids, normalize=False)
     accuracies: list[float] = []
     results: dict = {"folds": [], "average_accuracy": None}
     model_dir.mkdir(parents=True, exist_ok=True)
@@ -40,7 +50,6 @@ def evaluate_dataset(
     for fold, train_subset, val_subset in dataset.k_fold(
         n_splits=n_splits, shuffle=True, random_state=random_state
     ):
-        # train a fold-specific model
         model_path = model_dir / f"cnn_fold_{fold:02d}.pt"
         train(
             epochs=epochs,
@@ -50,7 +59,6 @@ def evaluate_dataset(
             resume=False,
         )
 
-        # load and evaluate
         checkpoint = torch.load(model_path, map_location=device)
         model = SimpleEEGCNN().to(device)
         model.load_state_dict(checkpoint.get("model_state", {}))
@@ -75,17 +83,55 @@ def evaluate_dataset(
             "saved_model": str(display_path),
         })
 
-    avg = np.mean(accuracies) if accuracies else 0.0
-    results["average_accuracy"] = float(avg)
-    print(f"K-fold ({n_splits}) average accuracy: {avg:.4f}")
+    _persist_results(results, accuracies)
 
-    # write benchmarks JSON
-    bench_dir = REPO_ROOT / "out" / "benchmarks"
-    bench_dir.mkdir(parents=True, exist_ok=True)
-    out_path = bench_dir / "cnn.json"
-    with open(out_path, "w") as f:
-        json.dump(results, f, indent=2)
-    print(f"Saved benchmarks to {out_path.relative_to(REPO_ROOT)}")
+
+def evaluate_saved_models(
+    dataset: EEGDataset,
+    model_dir: Path,
+    n_splits: int = 5,
+    random_state: int = 42,
+) -> None:
+    accuracies: list[float] = []
+    results: dict = {"folds": [], "average_accuracy": None}
+    model_dir.mkdir(parents=True, exist_ok=True)
+
+    print("Evaluating existing CNN checkpoints")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    for fold, _, val_subset in dataset.k_fold(
+        n_splits=n_splits, shuffle=True, random_state=random_state
+    ):
+        model_path = model_dir / f"cnn_fold_{fold:02d}.pt"
+        if not model_path.exists():
+            raise FileNotFoundError(
+                f"Expected checkpoint not found: {model_path}"
+            )
+        checkpoint = torch.load(model_path, map_location=device)
+        model = SimpleEEGCNN().to(device)
+        model.load_state_dict(checkpoint.get("model_state", {}))
+
+        loader = _make_loader(val_subset, shuffle=False, num_workers=1)
+        criterion = nn.CrossEntropyLoss()
+        loss, accuracy = _evaluate(model, loader, criterion, device)
+        accuracies.append(accuracy)
+
+        try:
+            display_path = model_path.relative_to(REPO_ROOT)
+        except ValueError:
+            display_path = model_path
+        print(
+            f"Fold {fold}: loss={loss:.4f}, accuracy={accuracy:.4f}, "
+            f"loaded_model={display_path}"
+        )
+        results["folds"].append({
+            "fold": fold,
+            "loss": float(loss),
+            "accuracy": float(accuracy),
+            "loaded_model": str(display_path),
+        })
+
+    _persist_results(results, accuracies)
 
 
 def parse_args() -> argparse.Namespace:
@@ -133,6 +179,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Smoke-test: load first 2 patients and use two folds",
     )
+    parser.add_argument(
+        "--use-saved-models",
+        action="store_true",
+        help="Load the checkpoints previously saved by train-cnn instead of retraining.",
+    )
     return parser.parse_args()
 
 
@@ -144,14 +195,26 @@ def main() -> None:
         args.n_splits = min(args.n_splits, len(patient_ids))
     else:
         patient_ids = args.patient_ids
-    evaluate_dataset(
+    dataset = EEGDataset(
         data_dir=args.data_dir,
-        model_dir=args.model_dir,
-        n_splits=args.n_splits,
-        epochs=args.epochs,
-        random_state=args.random_state,
         patient_ids=patient_ids,
+        normalize=False,
     )
+    if args.use_saved_models:
+        evaluate_saved_models(
+            dataset,
+            model_dir=args.model_dir,
+            n_splits=args.n_splits,
+            random_state=args.random_state,
+        )
+    else:
+        evaluate_dataset(
+            dataset,
+            model_dir=args.model_dir,
+            n_splits=args.n_splits,
+            epochs=args.epochs,
+            random_state=args.random_state,
+        )
 
 
 if __name__ == "__main__":

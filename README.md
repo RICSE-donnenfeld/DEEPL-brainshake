@@ -95,7 +95,7 @@ python -m brainshake.cli run visualize-data
 
 ### Full pipeline
 
-`brainshake compile` (or `python -m brainshake.cli compile`) runs every workflow top-to-bottom: data analysis, visualization, CNN training, each evaluation pipeline, and benchmark plotting. It simply executes the cataloged commands in order with their default flags, so expect it to be heavy (train + evaluations take time). Use it when you want a single shot to rebuild all artifacts; use `brainshake run <command>` if you need finer control over individual stages.
+`brainshake compile` (or `python -m brainshake.cli compile`) runs every workflow top-to-bottom: data analysis, visualization, CNN training, each evaluation pipeline, and benchmark plotting. It feeds the CNN training/evaluation commands the production-level arguments (`-c train -e 30 --kfolds 5 --seed 2026` for training, `--epochs 20 --n-splits 5 --random-state 2026 --use-saved-models` for the CNN eval, `--n-splits 5 --n-estimators 250 --max-depth 12 --random-state 2026` for the random forest, etc.) so the whole dataset is exercised with enough epochs before plotting. Training now saves fold checkpoints under `out/models/cnn/cnn_fold_00N.pt` and the evaluation step reuses those saved models instead of retraining. Run it once per heavy experiment; use `brainshake run <command>` for quick iterations.
 
 ## Next steps
 

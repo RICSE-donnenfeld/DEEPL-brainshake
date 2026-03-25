@@ -68,6 +68,45 @@ COMMANDS: tuple[CommandDef, ...] = (
 
 COMMAND_LOOKUP: Mapping[str, CommandDef] = {cmd.name: cmd for cmd in COMMANDS}
 
+COMPILE_ARGS: Mapping[str, tuple[str, ...]] = {
+    "train-cnn": (
+        "-c",
+        "train",
+        "-e",
+        "30",
+        "--kfolds",
+        "5",
+        "--seed",
+        "2026",
+        "-vvv",
+    ),
+    "evaluate-cnn": (
+        "--epochs",
+        "20",
+        "--n-splits",
+        "5",
+        "--random-state",
+        "2026",
+        "--use-saved-models",
+    ),
+    "evaluate-randomforest": (
+        "--n-splits",
+        "5",
+        "--n-estimators",
+        "250",
+        "--max-depth",
+        "12",
+        "--random-state",
+        "2026",
+    ),
+    "evaluate-threshold": (
+        "--n-splits",
+        "5",
+        "--random-state",
+        "2026",
+    ),
+}
+
 
 def _group_by_category() -> dict[str, list[CommandDef]]:
     grouped: dict[str, list[CommandDef]] = {}
@@ -145,7 +184,8 @@ def compile_pipeline() -> int:
     ):
         command = COMMAND_LOOKUP[name]
         print(f"\n==> {name} ({command.run_type})")
-        status = run_command(command, [])
+        extra = COMPILE_ARGS.get(name, [])
+        status = run_command(command, extra)
         if status != 0:
             print(f"command {name} failed with exit code {status}")
             outcome = status
