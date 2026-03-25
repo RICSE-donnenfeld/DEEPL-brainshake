@@ -18,6 +18,9 @@ dependencies = [
   "pyarrow",
 ]
 
+[project.scripts]
+brainshake = "brainshake.cli:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

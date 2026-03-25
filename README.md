@@ -1,13 +1,14 @@
 # Epileptic Seizure Detection using EEG
 
 <!--toc:start-->
+
 - [Epileptic Seizure Detection using EEG](#epileptic-seizure-detection-using-eeg)
   - [Getting started](#getting-started)
   - [Dataset](#dataset)
   - [Project structure](#project-structure)
   - [Usage](#usage)
   - [Next steps](#next-steps)
-<!--toc:end-->
+  <!--toc:end-->
 
 Lightweight PyTorch tooling and documentation for experimenting with convolutional models on the CHB-MIT scalp EEG recordings.
 
@@ -77,12 +78,22 @@ DEEPL-brainshake/
 
 ## Usage
 
-- **Inspect the dataset.** The `brainshake.data` entry point loads every `.npz` EEG window and logs success or failure with increasing verbosity. This is a good sanity check before training.
-- **Train a CNN (under development).** `src/brainshake/train_cnn.py` is intended to orchestrate model, optimizer, and evaluation wiring once training logic is implemented. Run `python -m brainshake.train_cnn` when it is ready.
-- **Reference material.** The `docs/` subtree collects architecture sketches, channel-fusion experiments, and validation plans that can guide experiments.
+All workflows are exposed through a single CLI entry point so you always launch experiments in a consistent manner:
+
+```bash
+# after installing the package (editable or regular)
+brainshake list
+brainshake run analyze-data -- --help
+python -m brainshake.cli run visualize-data
+```
+
+- `brainshake list` (or `python -m brainshake.cli list`) shows the available commands grouped by category.
+- `brainshake run <workflow>` forwards the rest of the arguments to that module so you can still use the flags you expect (e.g., `brainshake run train-cnn -- --epochs 20`).
+- `brainshake run analyze-data` runs the real-patient feature extractor that creates `out/data_analyze/summary.json`, followed by `brainshake run visualize-data` for the static plots, and `brainshake run plot-benchmarks` to build the benchmark charts after evaluations.
+
+- **Reference material.** The `docs/` subtree still collects architecture sketches, channel-fusion experiments, and validation plans that can guide experiments.
 
 ## Next steps
 
 1. Flesh out `brainshake.train_cnn` with the desired convolutional architecture, data batching, and logging.
 2. Add tests/benchmarks that validate training on a subset of the CHB-MIT windows.
-3. Document reproducibility steps inside `docs/Validation and Verification` to capture the current evaluation plan.
