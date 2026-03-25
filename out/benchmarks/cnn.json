@@ -1,0 +1,17 @@
+{
+  "folds": [
+    {
+      "fold": 0,
+      "loss": 4.089532624458588,
+      "accuracy": 0.654320987654321,
+      "saved_model": "out/models/cnn/cnn_fold_00.pt"
+    },
+    {
+      "fold": 1,
+      "loss": 0.1582290352166091,
+      "accuracy": 0.9517509140940104,
+      "saved_model": "out/models/cnn/cnn_fold_01.pt"
+    }
+  ],
+  "average_accuracy": 0.8030359508741657
+}

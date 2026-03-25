@@ -1,0 +1,15 @@
+{
+  "folds": [
+    {
+      "fold": 0,
+      "accuracy": 0.6123675297716595,
+      "saved_model": "out/models/randomforest/model_fold_00.joblib"
+    },
+    {
+      "fold": 1,
+      "accuracy": 0.9038033849749331,
+      "saved_model": "out/models/randomforest/model_fold_01.joblib"
+    }
+  ],
+  "average_accuracy": 0.7580854573732962
+}

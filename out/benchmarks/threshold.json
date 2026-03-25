@@ -1,0 +1,21 @@
+{
+  "folds": [
+    {
+      "fold": 0,
+      "std_threshold": 65.52813474768283,
+      "range_threshold": 281.70819274271014,
+      "min_threshold": -141.9427511420593,
+      "max_threshold": 139.76544160065086,
+      "accuracy": 0.5717251174478313
+    },
+    {
+      "fold": 1,
+      "std_threshold": 82.9579806210664,
+      "range_threshold": 408.99599208553514,
+      "min_threshold": -204.26661949671404,
+      "max_threshold": 204.7293725888211,
+      "accuracy": 0.9609483960948396
+    }
+  ],
+  "average_accuracy": 0.7663367567713355
+}
