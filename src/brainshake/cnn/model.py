@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Subset
 
-from .data import EEGDataset
+from ..data_handling.load_data import EEGDataset
 
 logger = logging.getLogger(__name__)
 
@@ -171,9 +171,7 @@ def train(
         model.load_state_dict(checkpoint.get("model_state", {}))
         optimizer.load_state_dict(checkpoint.get("optimizer_state", {}))
         start_epoch = checkpoint.get("epoch", 0)
-        logger.info(
-            f"Resuming training from {model_path} (epoch {start_epoch})"
-        )
+        logger.info(f"Resuming training from {model_path} (epoch {start_epoch})")
 
     model.train()
 

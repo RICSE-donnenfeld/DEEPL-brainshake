@@ -5,46 +5,11 @@ import json
 from typing import Any, Dict, List, Optional, Tuple, Sequence
 from numpy.typing import NDArray
 
+from ..data_handling.extract_features import FeatureDict, extract_basic_features
+
 DATA_DIR: Path = Path("data/Epilepsy")
 OUTPUT_DIR: Path = Path("out")
 OUTPUT_DIR.mkdir(exist_ok=True)
-
-
-def compute_mean(eeg_signal: NDArray[Any]) -> NDArray[Any]:
-    return np.mean(eeg_signal, axis=-1)
-
-
-def compute_std(eeg_signal: NDArray[Any]) -> NDArray[Any]:
-    return np.std(eeg_signal, axis=-1)
-
-
-def compute_min(eeg_signal: NDArray[Any]) -> NDArray[Any]:
-    return np.min(eeg_signal, axis=-1)
-
-
-def compute_max(eeg_signal: NDArray[Any]) -> NDArray[Any]:
-    return np.max(eeg_signal, axis=-1)
-
-
-def compute_range(eeg_signal: NDArray[Any]) -> NDArray[Any]:
-    return compute_max(eeg_signal) - compute_min(eeg_signal)
-
-
-def extract_5_metrics(eeg_window: NDArray[Any]) -> Dict[str, float]:
-    """
-    Extract all 5 basic metrics from EEG window.
-
-    Input:  EEG window of shape [21 channels, 128 samples]
-    Output: Dictionary with 5 metrics
-    """
-    # Compute per-channel, then average across channels
-    return {
-        "mean": float(np.mean(compute_mean(eeg_window))),
-        "std": float(np.mean(compute_std(eeg_window))),
-        "min": float(np.mean(compute_min(eeg_window))),
-        "max": float(np.mean(compute_max(eeg_window))),
-        "range": float(np.mean(compute_range(eeg_window))),
-    }
 
 
 # ============================================================================
@@ -121,16 +86,16 @@ def load_all_patients(
 
 def analyze_single_window(
     eeg_window: NDArray[Any], label: Optional[int] = None
-) -> Dict[str, Any]:
+) -> FeatureDict:
     """Analyze one EEG window."""
-    metrics: Dict[str, Any] = extract_5_metrics(eeg_window)
+    metrics: Dict[str, Any] = extract_basic_features(eeg_window)
     metrics["label"] = label
     return metrics
 
 
 def analyze_patient(
     patient_id: int,
-) -> Optional[Tuple[List[Dict[str, Any]], NDArray[Any]]]:
+) -> Optional[Tuple[List[FeatureDict], NDArray[Any]]]:
     """Analyze all windows for one patient."""
     eeg_data, labels = load_patient(patient_id)
 
@@ -144,7 +109,7 @@ def analyze_patient(
     # Compute metrics for all windows
     all_metrics = []
     for i in range(len(eeg_data)):
-        m = extract_5_metrics(eeg_data[i])
+        m = extract_basic_features(eeg_data[i])
         m["window_id"] = i
         m["label"] = int(labels[i])
         all_metrics.append(m)

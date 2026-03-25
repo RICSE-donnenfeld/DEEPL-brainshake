@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-OUTPUT_DIR = Path("out")
+OUTPUT_DIR = Path("out/data_analyze")
 SUMMARY_PATH = OUTPUT_DIR / "summary.json"
 OUTPUT_DIR.mkdir(exist_ok=True)
 

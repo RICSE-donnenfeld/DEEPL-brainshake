@@ -1,3 +1,8 @@
+"""
+Data Loader :
+Exports a pytorch Dataset class with integrated patient-level k-folding
+"""
+
 from pathlib import Path
 from typing import Optional, Sequence, Tuple, Union
 
@@ -138,9 +143,7 @@ class EEGDataset(Dataset):
 
         rng = np.random.default_rng(random_state)
         patient_order = (
-            rng.permutation(unique_patients)
-            if shuffle
-            else unique_patients.copy()
+            rng.permutation(unique_patients) if shuffle else unique_patients.copy()
         )
 
         patient_indices = {
