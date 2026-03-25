@@ -6,59 +6,61 @@ import argparse
 import subprocess
 import sys
 from dataclasses import dataclass
-from typing import Iterable, Sequence, Mapping
+from pathlib import Path
+from typing import Sequence, Mapping
 
 
 @dataclass(frozen=True)
 class CommandDef:
-    """Describe a workflow that can be invoked via ``python -m module``."""
+    """Describe a workflow that can be invoked via ``python -m`` or ``sbatch``."""
 
     name: str
-    module: str
+    target: str | Path
     description: str
     category: str
+    run_type: str = "python"
 
 
 COMMANDS: tuple[CommandDef, ...] = (
     CommandDef(
         name="analyze-data",
-        module="brainshake.data_analyze.analyze_data",
+        target="brainshake.data_analyze.analyze_data",
         description="Run the batch analysis over CHB-MIT EEG windows.",
         category="data analysis",
     ),
     CommandDef(
         name="visualize-data",
-        module="brainshake.data_analyze.visualize_data",
+        target="brainshake.data_analyze.visualize_data",
         description="Create the summary visualizations after analysis.",
         category="data visualization",
     ),
     CommandDef(
         name="train-cnn",
-        module="brainshake.models.cnn.model",
+        target="brainshake.models.cnn.model",
         description="Train the convolutional classifier or run its training command set.",
         category="model training",
     ),
     CommandDef(
         name="evaluate-cnn",
-        module="brainshake.models.cnn.evaluate",
+        target="brainshake.models.cnn.evaluate",
         description="Patient-wise evaluation for the CNN model.",
         category="model evaluation",
     ),
     CommandDef(
         name="evaluate-randomforest",
-        module="brainshake.models.randomforest.evaluate",
+        target="brainshake.models.randomforest.evaluate",
         description="Patient-wise evaluation for the random forest classifier.",
         category="model evaluation",
     ),
     CommandDef(
         name="evaluate-threshold",
-        module="brainshake.models.threshold.evaluate",
+        target="brainshake.models.threshold.evaluate",
         description="Evaluate the lightweight threshold baseline.",
         category="model evaluation",
     ),
     CommandDef(
         name="plot-benchmarks",
-        module="brainshake.plotting.plots",
+        target="brainshake.plotting.plots",
         description="Generate benchmark plots from saved metrics.",
         category="graph plotting",
     ),
@@ -82,11 +84,14 @@ def list_commands(category: str | None = None) -> None:
             continue
         print(f"{cat.title()}")
         for command in grouped[cat]:
-            print(f"  {command.name.ljust(25)}{command.description}")
+            print(f"  {command.name.ljust(30)}{command.description}")
 
 
 def run_command(command: CommandDef, extra_args: Sequence[str]) -> int:
-    args = [sys.executable, "-m", command.module, *extra_args]
+    extra = list(extra_args or [])
+    if extra and extra[0] == "--":
+        extra = extra[1:]
+    args = [sys.executable, "-m", str(command.target), *extra]
     result = subprocess.run(args)
     return result.returncode
 
@@ -119,7 +124,34 @@ def parse_args() -> argparse.Namespace:
         help="Arguments forwarded to the selected workflow.",
     )
 
+    subparsers.add_parser(
+        "compile", help="Run the entire pipeline from analysis to plotting."
+    )
+
     return parser.parse_args()
+
+
+def compile_pipeline() -> int:
+    outcome = 0
+    print("\n=== Running full Brainshake pipeline ===")
+    for name in (
+        "analyze-data",
+        "visualize-data",
+        "train-cnn",
+        "evaluate-cnn",
+        "evaluate-randomforest",
+        "evaluate-threshold",
+        "plot-benchmarks",
+    ):
+        command = COMMAND_LOOKUP[name]
+        print(f"\n==> {name} ({command.run_type})")
+        status = run_command(command, [])
+        if status != 0:
+            print(f"command {name} failed with exit code {status}")
+            outcome = status
+            break
+    print("=== Pipeline complete ===")
+    return outcome
 
 
 def main() -> int:
@@ -128,11 +160,12 @@ def main() -> int:
         list_commands(category=args.category)
         return 0
 
+    if args.subcommand == "compile":
+        return compile_pipeline()
+
     assert args.subcommand == "run"
     command = COMMAND_LOOKUP[args.command]
-    extra_args = list(args.args or [])
-    if extra_args and extra_args[0] == "--":
-        extra_args = extra_args[1:]
+    extra_args = args.args or []
     return run_command(command, extra_args)
 
 

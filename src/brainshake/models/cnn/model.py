@@ -131,7 +131,7 @@ def train(
 ) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(__file__).resolve().parents[3]
     data_dir = repo_root / "data" / "Epilepsy"
 
     logger.info(f"Using data directory: {data_dir}")
@@ -268,10 +268,13 @@ def main():
         seed = args.get("seed", None)
         model_path_arg = args.get("model_path")
         base_model_path = Path(model_path_arg) if model_path_arg else None
+        repo_root = Path(__file__).resolve().parents[3]
+        data_dir = repo_root / "data" / "Epilepsy"
         if kfolds > 1:
-            for fold, train_ds, val_ds in EEGDataset(
-                data_dir=Path(__file__).resolve().parents[2] / "data" / "Epilepsy"
-            ).k_fold(n_splits=kfolds, shuffle=True, random_state=seed):
+            dataset = EEGDataset(data_dir=data_dir)
+            for fold, train_ds, val_ds in dataset.k_fold(
+                n_splits=kfolds, shuffle=True, random_state=seed
+            ):
                 logger.info(f"Starting fold {fold + 1}/{kfolds}")
                 fold_model_path = None
                 if base_model_path is not None:

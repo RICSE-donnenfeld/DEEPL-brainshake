@@ -173,7 +173,7 @@ class EEGDataset(Dataset):
 
 
 def main():
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(__file__).resolve().parents[3]
     data_dir = repo_root / "data" / "Epilepsy"
 
     logger.info(f"Using data directory: {data_dir}")

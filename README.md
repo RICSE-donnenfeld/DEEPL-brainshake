@@ -93,6 +93,10 @@ python -m brainshake.cli run visualize-data
 
 - **Reference material.** The `docs/` subtree still collects architecture sketches, channel-fusion experiments, and validation plans that can guide experiments.
 
+### Full pipeline
+
+`brainshake compile` (or `python -m brainshake.cli compile`) runs every workflow top-to-bottom: data analysis, visualization, CNN training, each evaluation pipeline, and benchmark plotting. It simply executes the cataloged commands in order with their default flags, so expect it to be heavy (train + evaluations take time). Use it when you want a single shot to rebuild all artifacts; use `brainshake run <command>` if you need finer control over individual stages.
+
 ## Next steps
 
 1. Flesh out `brainshake.train_cnn` with the desired convolutional architecture, data batching, and logging.

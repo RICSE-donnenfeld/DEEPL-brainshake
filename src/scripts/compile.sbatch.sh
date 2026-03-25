@@ -14,4 +14,4 @@ set -euo pipefail
 
 source .venv/bin/activate
 
-python -m src.brainshake.cnn -c train --epochs 10 --kfolds 5 --seed 67 -vvv
+brainshake compile
