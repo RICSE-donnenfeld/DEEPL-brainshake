@@ -9,27 +9,82 @@ import json
 from typing import Iterable, List, Tuple, cast, Optional, Sequence
 
 import joblib
-from torch import Tensor
-from torch.utils.data import Subset
+import numpy as np
+import pandas as pd
+from typing import Any
+
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+
+try:
+    from torch import Tensor
+    from torch.utils.data import Subset
+
+    from ...data_handling.load_data import EEGDataset
+
+    TORCH_AVAILABLE = True
+except ModuleNotFoundError:  # pragma: no cover
+    TORCH_AVAILABLE = False
+    Tensor = object  # type: ignore[assignment]
+    Subset = object  # type: ignore[assignment]
+    EEGDataset = object  # type: ignore[assignment]
 
 from .model import RandomForestSignalClassifier
 from ...data_handling.extract_features import FeatureDict, extract_basic_features
-from ...data_handling.load_data import EEGDataset
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_MODEL_DIR = REPO_ROOT / "out" / "models" / "randomforest"
 
 
-def extract_features_from_subset(subset: Subset) -> Tuple[List[FeatureDict], List[int]]:
+def extract_features_from_subset(subset: Any) -> Tuple[List[FeatureDict], List[int]]:
     features: List[FeatureDict] = []
     labels: List[int] = []
     for idx in range(len(subset)):
-        x, y = cast(Tuple[Tensor, Tensor], subset[idx])
+        x, y = cast(Tuple[Any, Any], subset[idx])
         arr = x.numpy()
         features.append(extract_basic_features(arr))
         labels.append(int(y.item()))
+    return features, labels
+
+
+def _patient_folds(
+    patient_ids: Sequence[int],
+    n_splits: int,
+    random_state: int,
+) -> List[List[int]]:
+    if n_splits < 2:
+        raise ValueError("n_splits must be at least 2")
+    if n_splits > len(patient_ids):
+        raise ValueError("n_splits cannot exceed patient count")
+    rng = np.random.default_rng(random_state)
+    ordered = list(rng.permutation(list(patient_ids)))
+    folds: list[list[int]] = [[] for _ in range(n_splits)]
+    for idx, patient in enumerate(ordered):
+        folds[idx % n_splits].append(int(patient))
+    return folds
+
+
+def _load_patient_arrays(data_dir: Path, patient_id: int) -> Tuple[np.ndarray, np.ndarray]:
+    pid = f"chb{patient_id:02d}"
+    npz_path = data_dir / f"{pid}_seizure_EEGwindow_1.npz"
+    meta_path = data_dir / f"{pid}_seizure_metadata_1.parquet"
+    npz = np.load(npz_path, allow_pickle=True)
+    eeg = npz["EEG_win"].astype(np.float32)
+    metadata = pd.read_parquet(meta_path)
+    labels = metadata["class"].to_numpy(dtype=np.int64)
+    return eeg, labels
+
+
+def _extract_features_from_patients(
+    data_dir: Path, patient_ids: Sequence[int]
+) -> Tuple[List[FeatureDict], List[int]]:
+    features: List[FeatureDict] = []
+    labels: List[int] = []
+    for pid in patient_ids:
+        eeg, y = _load_patient_arrays(data_dir, int(pid))
+        for window, label in zip(eeg, y):
+            features.append(extract_basic_features(window))
+            labels.append(int(label))
     return features, labels
 
 
@@ -42,50 +97,130 @@ def evaluate_dataset(
     max_depth: int | None = None,
     patient_ids: Optional[Sequence[int]] = None,
 ) -> None:
-    dataset = EEGDataset(data_dir=data_dir, patient_ids=patient_ids, normalize=False)
+    if TORCH_AVAILABLE:
+        dataset = EEGDataset(data_dir=data_dir, patient_ids=patient_ids, normalize=False)
+        dataset_patient_ids = [int(pid) for pid in dataset.patient_ids]
+    else:
+        dataset = None
+        dataset_patient_ids = (
+            [int(pid) for pid in patient_ids]
+            if patient_ids is not None
+            else list(range(1, 25))
+        )
     accuracies: List[float] = []
-    results: dict = {"folds": [], "average_accuracy": None}
+    results: dict = {
+        "meta": {
+            "n_splits": int(n_splits),
+            "random_state": int(random_state),
+            "patient_ids": dataset_patient_ids,
+            "n_estimators": int(n_estimators),
+            "max_depth": int(max_depth) if max_depth is not None else None,
+            "torch_available": bool(TORCH_AVAILABLE),
+        },
+        "folds": [],
+        "average_accuracy": None,
+    }
     model_dir.mkdir(parents=True, exist_ok=True)
 
-    print("Starting patient-wise k-fold RandomForest evaluation")
-    for fold, train_subset, val_subset in dataset.k_fold(
-        n_splits=n_splits, shuffle=True, random_state=random_state
-    ):
-        train_features, train_labels = extract_features_from_subset(train_subset)
-        val_features, val_labels = extract_features_from_subset(val_subset)
+    if TORCH_AVAILABLE:
+        assert dataset is not None
+        print("Starting patient-wise k-fold RandomForest evaluation")
+        for fold, train_subset, val_subset in dataset.k_fold(
+            n_splits=n_splits, shuffle=True, random_state=random_state
+        ):
+            train_features, train_labels = extract_features_from_subset(train_subset)
+            val_features, val_labels = extract_features_from_subset(val_subset)
 
-        classifier = RandomForestSignalClassifier(
-            n_estimators=n_estimators,
-            max_depth=max_depth,
-            random_state=random_state,
+            classifier = RandomForestSignalClassifier(
+                n_estimators=n_estimators,
+                max_depth=max_depth,
+                random_state=random_state,
+            )
+            classifier.fit(train_features, train_labels)
+            predictions = classifier.predict(val_features)
+            accuracy = float(accuracy_score(val_labels, predictions)) if val_labels else 0.0
+            precision = float(
+                precision_score(val_labels, predictions, zero_division=0)
+            )
+            recall = float(recall_score(val_labels, predictions, zero_division=0))
+            f1 = float(f1_score(val_labels, predictions, zero_division=0))
+            accuracies.append(accuracy)
+
+            model_path = model_dir / f"model_fold_{fold:02d}.joblib"
+            joblib.dump(classifier, model_path)
+            try:
+                display_path = model_path.relative_to(REPO_ROOT)
+            except ValueError:
+                display_path = model_path
+            print(
+                f"Fold {fold}: accuracy={accuracy:.4f}, precision={precision:.4f}, recall={recall:.4f}, f1={f1:.4f}, saved_model={display_path}"
+            )
+            results["folds"].append(
+                {
+                    "fold": fold,
+                    "train_patients": getattr(train_subset, "patient_ids", None),
+                    "val_patients": getattr(val_subset, "patient_ids", None),
+                    "accuracy": accuracy,
+                    "precision": precision,
+                    "recall": recall,
+                    "f1": f1,
+                    "saved_model": str(display_path),
+                }
+            )
+    else:
+        print("Starting patient-wise k-fold RandomForest evaluation (torch-free fallback)")
+        folds = _patient_folds(
+            dataset_patient_ids, n_splits=n_splits, random_state=random_state
         )
-        classifier.fit(train_features, train_labels)
-        predictions = classifier.predict(val_features)
+        for fold, val_patients in enumerate(folds):
+            train_patients = [
+                int(pid) for pid in dataset_patient_ids if int(pid) not in val_patients
+            ]
+            train_features, train_labels = _extract_features_from_patients(
+                data_dir, train_patients
+            )
+            val_features, val_labels = _extract_features_from_patients(
+                data_dir, val_patients
+            )
 
-        # Calculate metrics using sklearn
-        accuracy = accuracy_score(val_labels, predictions)
-        precision = precision_score(val_labels, predictions, zero_division='warn')
-        recall = recall_score(val_labels, predictions, zero_division='warn')
-        f1 = f1_score(val_labels, predictions, zero_division='warn')
-        accuracies.append(accuracy)
+            classifier = RandomForestSignalClassifier(
+                n_estimators=n_estimators,
+                max_depth=max_depth,
+                random_state=random_state,
+            )
+            classifier.fit(train_features, train_labels)
+            predictions = classifier.predict(val_features)
 
-        model_path = model_dir / f"model_fold_{fold:02d}.joblib"
-        joblib.dump(classifier, model_path)
-        try:
-            display_path = model_path.relative_to(REPO_ROOT)
-        except ValueError:
-            display_path = model_path
-        print(f"Fold {fold}: accuracy={accuracy:.4f}, precision={precision:.4f}, recall={recall:.4f}, f1={f1:.4f}, saved_model={display_path}")
-        results["folds"].append(
-            {
-                "fold": fold,
-                "accuracy": accuracy,
-                "precision": precision,
-                "recall": recall,
-                "f1": f1,
-                "saved_model": str(display_path),
-            }
-        )
+            accuracy = float(accuracy_score(val_labels, predictions)) if val_labels else 0.0
+            precision = float(
+                precision_score(val_labels, predictions, zero_division=0)
+            )
+            recall = float(recall_score(val_labels, predictions, zero_division=0))
+            f1 = float(f1_score(val_labels, predictions, zero_division=0))
+            accuracies.append(accuracy)
+
+            model_path = model_dir / f"model_fold_{fold:02d}.joblib"
+            joblib.dump(classifier, model_path)
+            try:
+                display_path = model_path.relative_to(REPO_ROOT)
+            except ValueError:
+                display_path = model_path
+
+            print(
+                f"Fold {fold}: accuracy={accuracy:.4f}, saved_model={display_path}"
+            )
+            results["folds"].append(
+                {
+                    "fold": fold,
+                    "train_patients": train_patients,
+                    "val_patients": val_patients,
+                    "accuracy": accuracy,
+                    "precision": precision,
+                    "recall": recall,
+                    "f1": f1,
+                    "saved_model": str(display_path),
+                }
+            )
 
     # Calculate average accuracy
     average = sum(accuracies) / len(accuracies) if accuracies else 0.0

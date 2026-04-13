@@ -48,15 +48,6 @@ class EEGDataset(Dataset):
 
         self.data, self.labels, self.patient_index = self._load_all_patients()
 
-        if self.normalize:
-            mean = self.data.mean()
-            std = self.data.std()
-            if std == 0:
-                raise ValueError(
-                    "Standard deviation is zero, cannot normalize dataset."
-                )
-            self.data = (self.data - mean) / std
-
     def _load_all_patients(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         all_data = []
         all_labels = []
@@ -114,7 +105,15 @@ class EEGDataset(Dataset):
         return len(self.labels)
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        x = torch.from_numpy(self.data[index]).to(dtype=torch.float32)
+        window = self.data[index]
+        if self.normalize:
+            mean = float(window.mean())
+            std = float(window.std())
+            if std > 0:
+                window = (window - mean) / std
+            else:
+                window = window - mean
+        x = torch.from_numpy(window).to(dtype=torch.float32)
         y = torch.tensor(self.labels[index], dtype=torch.long)
         return x, y
 
@@ -161,7 +160,18 @@ class EEGDataset(Dataset):
             for fold, val_patients in enumerate(folds):
                 val_idx = np.concatenate([patient_to_idxs[p] for p in val_patients])
                 train_idx = np.setdiff1d(all_indices, val_idx)
-                yield fold, Subset(self, train_idx.tolist()), Subset(self, val_idx.tolist())
+                train_set = Subset(self, train_idx.tolist())
+                val_set = Subset(self, val_idx.tolist())
+
+                # Attach split metadata for reproducibility (best-effort; callers may ignore).
+                train_patients = [int(p) for p in unique_patients if p not in val_patients]
+                val_patients_list = [int(p) for p in val_patients]
+                setattr(train_set, "patient_ids", train_patients)
+                setattr(val_set, "patient_ids", val_patients_list)
+                setattr(train_set, "fold", fold)
+                setattr(val_set, "fold", fold)
+
+                yield fold, train_set, val_set
 
         elif level == "window":
             idxs = rng.permutation(all_indices) if shuffle else all_indices.copy()
@@ -182,7 +192,11 @@ class EEGDataset(Dataset):
                             drop.add(patient_idxs[j])
                 val_idx = np.setdiff1d(val_idx, np.fromiter(drop, int))
                 train_idx = np.setdiff1d(all_indices, val_idx)
-                yield fold, Subset(self, train_idx.tolist()), Subset(self, val_idx.tolist())
+                train_set = Subset(self, train_idx.tolist())
+                val_set = Subset(self, val_idx.tolist())
+                setattr(train_set, "fold", fold)
+                setattr(val_set, "fold", fold)
+                yield fold, train_set, val_set
 
         else:  # level == "seizure"
             # find contiguous seizure episodes per patient
@@ -206,7 +220,11 @@ class EEGDataset(Dataset):
             for fold, eps in enumerate(folds):
                 val_idx = np.concatenate(eps)
                 train_idx = np.setdiff1d(all_indices, val_idx)
-                yield fold, Subset(self, train_idx.tolist()), Subset(self, val_idx.tolist())
+                train_set = Subset(self, train_idx.tolist())
+                val_set = Subset(self, val_idx.tolist())
+                setattr(train_set, "fold", fold)
+                setattr(val_set, "fold", fold)
+                yield fold, train_set, val_set
 
 
 def main():

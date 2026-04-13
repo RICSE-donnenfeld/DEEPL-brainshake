@@ -14,4 +14,5 @@ set -euo pipefail
 
 source .venv/bin/activate
 
-brainshake compile
+python -m brainshake compile
+

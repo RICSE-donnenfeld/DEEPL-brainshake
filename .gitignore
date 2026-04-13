@@ -1,6 +1,10 @@
 data/Epilepsy/
 Epilepsy/
 
+# Local dataset archives
+data/*.tar.gz
+data/*.tgz
+
 slurm_io/
 
 # Byte-compiled / optimized / DLL files
@@ -11,7 +15,12 @@ __pycache__/
 # C extensions
 *.so
 
-out/models/randomforest/*
+# Run artifacts
+out/
+
+# Ad-hoc exported plots in repo root
+seizures_per_patient.png
+windows_per_patient.png
 
 # Distribution / packaging
 .Python

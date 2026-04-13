@@ -62,7 +62,17 @@ def evaluate_dataset(
     random_state: int = 42,
 ) -> None:
     accuracies: list[float] = []
-    results: dict = {"folds": [], "average_accuracy": None}
+    results: dict = {
+        "meta": {
+            "n_splits": int(n_splits),
+            "random_state": int(random_state),
+            "epochs": int(epochs),
+            "patient_ids": [int(pid) for pid in dataset.patient_ids],
+            "normalize": True,
+        },
+        "folds": [],
+        "average_accuracy": None,
+    }
     model_dir.mkdir(parents=True, exist_ok=True)
 
     print("Starting patient-wise k-fold CNN evaluation")
@@ -78,13 +88,17 @@ def evaluate_dataset(
             val_dataset=val_subset,
             model_path=model_path,
             resume=False,
+            seed=random_state,
         )
 
-        checkpoint = torch.load(model_path, map_location=device)
+        try:
+            checkpoint = torch.load(model_path, map_location=device, weights_only=True)
+        except TypeError:
+            checkpoint = torch.load(model_path, map_location=device)
         model = SimpleEEGCNN().to(device)
         model.load_state_dict(checkpoint.get("model_state", {}))
 
-        loader = _make_loader(val_subset, shuffle=False, num_workers=1)
+        loader = _make_loader(val_subset, shuffle=False, num_workers=1, seed=random_state)
         criterion = nn.CrossEntropyLoss()
         loss, accuracy, precision, recall, f1 = _evaluate(
             model, loader, criterion, device
@@ -102,6 +116,8 @@ def evaluate_dataset(
         results["folds"].append(
             {
                 "fold": fold,
+                "train_patients": getattr(train_subset, "patient_ids", None),
+                "val_patients": getattr(val_subset, "patient_ids", None),
                 "loss": float(loss),
                 "accuracy": float(accuracy),
                 "precision": float(precision),
@@ -121,23 +137,38 @@ def evaluate_saved_models(
     random_state: int = 42,
 ) -> None:
     accuracies: list[float] = []
-    results: dict = {"folds": [], "average_accuracy": None}
+    results: dict = {
+        "meta": {
+            "n_splits": int(n_splits),
+            "random_state": int(random_state),
+            "patient_ids": [int(pid) for pid in dataset.patient_ids],
+            "normalize": True,
+            "use_saved_models": True,
+        },
+        "folds": [],
+        "average_accuracy": None,
+    }
     model_dir.mkdir(parents=True, exist_ok=True)
 
     print("Evaluating existing CNN checkpoints")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    for fold, _, val_subset in dataset.k_fold(
+    for fold, train_subset, val_subset in dataset.k_fold(
         n_splits=n_splits, shuffle=True, random_state=random_state, level="window"
     ):
         model_path = model_dir / f"cnn_fold_{fold:02d}.pt"
         if not model_path.exists():
-            raise FileNotFoundError(f"Expected checkpoint not found: {model_path}")
-        checkpoint = torch.load(model_path, map_location=device)
+            raise FileNotFoundError(
+                f"Expected checkpoint not found: {model_path}"
+            )
+        try:
+            checkpoint = torch.load(model_path, map_location=device, weights_only=True)
+        except TypeError:
+            checkpoint = torch.load(model_path, map_location=device)
         model = SimpleEEGCNN().to(device)
         model.load_state_dict(checkpoint.get("model_state", {}))
 
-        loader = _make_loader(val_subset, shuffle=False, num_workers=1)
+        loader = _make_loader(val_subset, shuffle=False, num_workers=1, seed=random_state)
         criterion = nn.CrossEntropyLoss()
         loss, accuracy, precision, recall, f1 = _evaluate(
             model, loader, criterion, device
@@ -155,6 +186,8 @@ def evaluate_saved_models(
         results["folds"].append(
             {
                 "fold": fold,
+                "train_patients": getattr(train_subset, "patient_ids", None),
+                "val_patients": getattr(val_subset, "patient_ids", None),
                 "loss": float(loss),
                 "accuracy": float(accuracy),
                 "precision": float(precision),
@@ -231,7 +264,7 @@ def main() -> None:
     dataset = EEGDataset(
         data_dir=args.data_dir,
         patient_ids=patient_ids,
-        normalize=False,
+        normalize=True,
     )
     if args.use_saved_models:
         evaluate_saved_models(

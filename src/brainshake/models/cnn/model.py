@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 import os
+import random
+import functools
 
 import argparse
 import logging
@@ -24,15 +26,45 @@ DEFAULT_DATA_DIR = REPO_ROOT / "data" / "Epilepsy"
 DEFAULT_MODEL_DIR = REPO_ROOT / "out" / "models" / "cnn"
 
 
+def seed_everything(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+def seed_worker(worker_id: int, base_seed: int) -> None:
+    worker_seed = int(base_seed) + int(worker_id)
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+    torch.manual_seed(worker_seed)
+
+
 def _make_loader(
-    dataset: Union[EEGDataset, Subset], shuffle: bool, num_workers: int
+    dataset: Union[EEGDataset, Subset],
+    shuffle: bool,
+    num_workers: int,
+    seed: int | None = None,
 ) -> DataLoader:
+    generator = None
+    if seed is not None:
+        generator = torch.Generator()
+        generator.manual_seed(int(seed))
+
+    worker_init_fn = None
+    if seed is not None:
+        worker_init_fn = functools.partial(seed_worker, base_seed=int(seed))
+
     return DataLoader(
         dataset,
         batch_size=BATCH_SIZE,
         shuffle=shuffle,
         num_workers=num_workers,
         pin_memory=True,
+        generator=generator,
+        worker_init_fn=worker_init_fn,
     )
 
 
@@ -148,20 +180,23 @@ def train(
     val_dataset: Optional[Union[EEGDataset, Subset]] = None,
     model_path: Optional[Path] = None,
     resume: bool = False,
+    seed: int | None = None,
 ) -> None:
+    if seed is not None:
+        seed_everything(int(seed))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     logger.info(f"Using data directory: {DEFAULT_DATA_DIR}")
 
     if train_dataset is None:
-        dataset = EEGDataset(data_dir=DEFAULT_DATA_DIR, normalize=False)
+        dataset = EEGDataset(data_dir=DEFAULT_DATA_DIR, normalize=True)
     else:
         dataset = train_dataset
     cpu_count = os.cpu_count() or 1
     num_workers = min(8, cpu_count)
-    loader = _make_loader(dataset, shuffle=True, num_workers=num_workers)
+    loader = _make_loader(dataset, shuffle=True, num_workers=num_workers, seed=seed)
     val_loader = (
-        _make_loader(val_dataset, shuffle=False, num_workers=num_workers)
+        _make_loader(val_dataset, shuffle=False, num_workers=num_workers, seed=seed)
         if val_dataset is not None
         else None
     )
@@ -287,23 +322,24 @@ def main():
         base_model_path = Path(model_path_arg) if model_path_arg else None
         DEFAULT_MODEL_DIR.mkdir(parents=True, exist_ok=True)
         if kfolds > 1:
-            dataset = EEGDataset(data_dir=DEFAULT_DATA_DIR)
+            dataset = EEGDataset(data_dir=DEFAULT_DATA_DIR, normalize=True)
             for fold, train_ds, val_ds in dataset.k_fold(
                 n_splits=kfolds, shuffle=True, random_state=seed
             ):
                 logger.info(f"Starting fold {fold + 1}/{kfolds}")
                 if base_model_path is not None:
                     fold_model_path = base_model_path.with_name(
-                        f"{base_model_path.stem}_fold{fold + 1}{base_model_path.suffix}"
+                        f"{base_model_path.stem}_fold_{fold:02d}{base_model_path.suffix}"
                     )
                 else:
-                    fold_model_path = DEFAULT_MODEL_DIR / f"cnn_fold_{fold + 1:02d}.pt"
+                    fold_model_path = DEFAULT_MODEL_DIR / f"cnn_fold_{fold:02d}.pt"
                 train(
                     args["epochs"],
                     train_dataset=train_ds,
                     val_dataset=val_ds,
                     model_path=fold_model_path,
                     resume=args["resume"],
+                    seed=seed,
                 )
         else:
             target_path = base_model_path or (DEFAULT_MODEL_DIR / "cnn_final.pt")
@@ -311,6 +347,7 @@ def main():
                 args["epochs"],
                 model_path=target_path,
                 resume=args["resume"],
+                seed=seed,
             )
     else:
         logger.error(f"Unrecognized command {args['command']}")
