@@ -13,8 +13,6 @@ from ...data_handling.extract_features import FeatureDict
 
 @dataclass
 class RandomForestSignalClassifier:
-    """Wrapper around sklearn RandomForest for EEG feature dictionaries."""
-
     n_estimators: int = 100
     max_depth: int | None = None
     random_state: int = 42

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Iterable, List, Optional, Sequence
 
 from ...data_handling.extract_features import FeatureDict
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 
 @dataclass
@@ -40,13 +41,19 @@ class ThresholdClassifier:
         self,
         features: Sequence[FeatureDict],
         labels: Iterable[int],
-    ) -> float:
+    ) -> tuple[float, float, float, float]:
         preds = self.predict_batch(features)
         label_list = list(labels)
         if len(preds) != len(label_list):
             raise ValueError("Features and labels must be the same length")
-        correct = sum(1 for p, l in zip(preds, label_list) if p == l)
-        return correct / len(label_list)
+        
+        # Calculate metrics using sklearn
+        accuracy = accuracy_score(label_list, preds)
+        precision = precision_score(label_list, preds, zero_division='warn')
+        recall = recall_score(label_list, preds, zero_division='warn')
+        f1 = f1_score(label_list, preds, zero_division='warn')
+        
+        return accuracy, precision, recall, f1
 
     def describe(self) -> str:
         condition = "AND" if self.require_both else "OR"

@@ -133,43 +133,80 @@ class EEGDataset(Dataset):
         n_splits: int = 5,
         shuffle: bool = True,
         random_state: Optional[int] = None,
+        level: str = "patient",
     ):
-        """Patient-wise k-fold split with optional reproducible shuffle."""
-        unique_patients = np.unique(self.patient_index)
+        """
+        k-fold split at different levels: "patient", "window", or "seizure".
+        - patient: split by patient, no data leakage across patients.
+        - window: split by individual windows; for seizure windows in validation, discard 4 neighbors.
+        - seizure: split by contiguous seizure episodes (all windows of a seizure).
+        """
+        if level not in ("patient", "window", "seizure"):
+            raise ValueError(f"Invalid level: {level}. Choose 'patient', 'window', or 'seizure'.")
         if n_splits < 2:
             raise ValueError("n_splits must be at least 2")
-        if n_splits > len(unique_patients):
-            raise ValueError("n_splits cannot exceed unique patient count")
 
         rng = np.random.default_rng(random_state)
-        patient_order = (
-            rng.permutation(unique_patients) if shuffle else unique_patients.copy()
-        )
+        all_indices = np.arange(len(self.labels))
 
-        patient_indices = {
-            patient: np.flatnonzero(self.patient_index == patient)
-            for patient in unique_patients
-        }
+        if level == "patient":
+            unique_patients = np.unique(self.patient_index)
+            if n_splits > len(unique_patients):
+                raise ValueError("n_splits cannot exceed unique patient count")
+            patients = rng.permutation(unique_patients) if shuffle else unique_patients.copy()
+            patient_to_idxs = {p: np.flatnonzero(self.patient_index == p) for p in unique_patients}
+            folds = [[] for _ in range(n_splits)]
+            for i, p in enumerate(patients):
+                folds[i % n_splits].append(p)
+            for fold, val_patients in enumerate(folds):
+                val_idx = np.concatenate([patient_to_idxs[p] for p in val_patients])
+                train_idx = np.setdiff1d(all_indices, val_idx)
+                yield fold, Subset(self, train_idx.tolist()), Subset(self, val_idx.tolist())
 
-        folds: list[list[int]] = [[] for _ in range(n_splits)]
-        for idx, patient in enumerate(patient_order):
-            folds[idx % n_splits].append(patient)
+        elif level == "window":
+            idxs = rng.permutation(all_indices) if shuffle else all_indices.copy()
+            # assign windows to folds in round-robin
+            fold_bins = {i: idxs[i::n_splits] for i in range(n_splits)}
+            for fold in range(n_splits):
+                val_idx = np.array(fold_bins[fold], dtype=int)
+                # remove neighbors around seizure windows in validation
+                drop = set()
+                radius = 4
+                for idx in val_idx[self.labels[val_idx] == 1]:
+                    pid = self.patient_index[idx]
+                    patient_idxs = np.flatnonzero(self.patient_index == pid)
+                    pos = np.searchsorted(patient_idxs, idx)
+                    for offset in range(-radius, radius + 1):
+                        j = pos + offset
+                        if 0 <= j < len(patient_idxs):
+                            drop.add(patient_idxs[j])
+                val_idx = np.setdiff1d(val_idx, np.fromiter(drop, int))
+                train_idx = np.setdiff1d(all_indices, val_idx)
+                yield fold, Subset(self, train_idx.tolist()), Subset(self, val_idx.tolist())
 
-        for fold, val_patients in enumerate(folds):
-            val_indices = np.concatenate(
-                [patient_indices[patient] for patient in val_patients]
-            )
-            train_indices = np.concatenate(
-                [
-                    patient_indices[patient]
-                    for patient in unique_patients
-                    if patient not in val_patients
-                ]
-            )
-
-            train_set = Subset(self, train_indices.tolist())
-            val_set = Subset(self, val_indices.tolist())
-            yield fold, train_set, val_set
+        else:  # level == "seizure"
+            # find contiguous seizure episodes per patient
+            episodes: list[np.ndarray] = []
+            for pid in np.unique(self.patient_index):
+                pid_idxs = np.flatnonzero(self.patient_index == pid)
+                labels = self.labels[pid_idxs]
+                is_sz = labels == 1
+                padded = np.concatenate(([0], is_sz.view(np.int8), [0]))
+                diffs = np.diff(padded)
+                starts = np.where(diffs == 1)[0]
+                ends = np.where(diffs == -1)[0]
+                for s, e in zip(starts, ends):
+                    episodes.append(pid_idxs[s:e])
+            if len(episodes) < n_splits:
+                raise ValueError("Number of seizure episodes less than n_splits")
+            order = rng.permutation(len(episodes)) if shuffle else np.arange(len(episodes))
+            folds = [[] for _ in range(n_splits)]
+            for i, ep_i in enumerate(order):
+                folds[i % n_splits].append(episodes[ep_i])
+            for fold, eps in enumerate(folds):
+                val_idx = np.concatenate(eps)
+                train_idx = np.setdiff1d(all_indices, val_idx)
+                yield fold, Subset(self, train_idx.tolist()), Subset(self, val_idx.tolist())
 
 
 def main():

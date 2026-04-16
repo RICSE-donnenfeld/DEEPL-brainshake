@@ -11,6 +11,7 @@ from typing import Iterable, List, Optional, Tuple, cast
 import numpy as np
 from torch.utils.data import Subset
 from torch import Tensor
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 from .classifier import ThresholdClassifier
 from ...data_handling.load_data import EEGDataset
@@ -93,7 +94,7 @@ def evaluate_dataset(
             min_threshold=min_thr,
             max_threshold=max_thr,
         )
-        accuracy = classifier.evaluate(val_features, val_labels)
+        accuracy, precision, recall, f1 = classifier.evaluate(val_features, val_labels)
 
         threshold_parts = [
             f"std_thr={std_thr:.1f}",
@@ -103,7 +104,7 @@ def evaluate_dataset(
             threshold_parts.append(f"min_thr={min_thr:.1f}")
         if max_thr is not None:
             threshold_parts.append(f"max_thr={max_thr:.1f}")
-        print(f"Fold {fold}: {', '.join(threshold_parts)}, accuracy={accuracy:.4f}")
+        print(f"Fold {fold}: {', '.join(threshold_parts)}, accuracy={accuracy:.4f}, precision={precision:.4f}, recall={recall:.4f}, f1={f1:.4f}")
         accuracies.append(accuracy)
         results["folds"].append({
             "fold": fold,
@@ -112,11 +113,33 @@ def evaluate_dataset(
             "min_threshold": min_thr,
             "max_threshold": max_thr,
             "accuracy": accuracy,
+            "precision": precision,
+            "recall": recall,
+            "f1": f1,
         })
 
+    # Calculate average accuracy
     avg = np.mean(accuracies) if accuracies else 0.0
     results["average_accuracy"] = float(avg)
     print(f"K-fold ({n_splits}) average accuracy: {avg:.4f}")
+    
+    # Calculate average precision, recall, and f1 if they exist in results
+    if results.get("folds") and len(results["folds"]) > 0:
+        precisions = [fold.get("precision", 0.0) for fold in results["folds"]]
+        recalls = [fold.get("recall", 0.0) for fold in results["folds"]]
+        f1s = [fold.get("f1", 0.0) for fold in results["folds"]]
+        
+        avg_precision = np.mean(precisions) if precisions else 0.0
+        avg_recall = np.mean(recalls) if recalls else 0.0
+        avg_f1 = np.mean(f1s) if f1s else 0.0
+        
+        results["average_precision"] = float(avg_precision)
+        results["average_recall"] = float(avg_recall)
+        results["average_f1"] = float(avg_f1)
+        
+        print(f"K-fold average precision: {avg_precision:.4f}")
+        print(f"K-fold average recall: {avg_recall:.4f}")
+        print(f"K-fold average F1: {avg_f1:.4f}")
 
     # write benchmarks JSON
     bench_dir = REPO_ROOT / "out" / "benchmarks"

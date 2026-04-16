@@ -11,6 +11,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Subset
+from sklearn.metrics import precision_score, recall_score, f1_score
 
 from ...data_handling.load_data import EEGDataset
 
@@ -49,10 +50,11 @@ def _evaluate(
     loader: DataLoader,
     criterion: nn.CrossEntropyLoss,
     device: torch.device,
-) -> tuple[float, float]:
+) -> tuple[float, float, float, float, float]:
     model.eval()
     total_loss = 0.0
-    correct = 0
+    all_preds = []
+    all_labels = []
     total = 0
     with torch.no_grad():
         for x_batch, y_batch in loader:
@@ -64,13 +66,27 @@ def _evaluate(
 
             total_loss += loss.item() * x_batch.size(0)
             preds = torch.argmax(outputs, dim=1)
-            correct += (preds == y_batch).sum().item()
+            all_preds.extend(preds.cpu().numpy())
+            all_labels.extend(y_batch.cpu().numpy())
             total += x_batch.size(0)
 
     model.train()
     if total == 0:
-        return 0.0, 0.0
-    return total_loss / total, correct / total
+        return 0.0, 0.0, 0.0, 0.0, 0.0
+    
+    # Convert to numpy arrays for sklearn metrics
+    import numpy as np
+    all_preds = np.array(all_preds)
+    all_labels = np.array(all_labels)
+    
+    # Calculate metrics
+    accuracy = (all_preds == all_labels).mean()
+    precision = precision_score(all_labels, all_preds, zero_division='warn')
+    recall = recall_score(all_labels, all_preds, zero_division='warn')
+    f1 = f1_score(all_labels, all_preds, zero_division='warn')
+    
+    avg_loss = total_loss / total
+    return avg_loss, accuracy, precision, recall, f1
 
 
 def _save_checkpoint(
@@ -206,9 +222,9 @@ def train(
             f"Epoch {current_epoch} finished. Avg loss: {running_loss / len(loader):.4f}"
         )
         if val_loader is not None:
-            val_loss, val_acc = _evaluate(model, val_loader, criterion, device)
+            val_loss, val_acc, val_precision, val_recall, val_f1 = _evaluate(model, val_loader, criterion, device)
             logger.info(
-                f"Epoch {current_epoch} validation: Loss {val_loss:.4f}, Acc {val_acc:.4f}"
+                f"Epoch {current_epoch} validation: Loss {val_loss:.4f}, Acc {val_acc:.4f}, Precision {val_precision:.4f}, Recall {val_recall:.4f}, F1 {val_f1:.4f}"
             )
         if model_path is not None:
             _save_checkpoint(model, optimizer, model_path, current_epoch)

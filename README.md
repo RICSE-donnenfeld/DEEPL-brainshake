@@ -100,4 +100,9 @@ python -m brainshake.cli run visualize-data
 ## Next steps
 
 1. Flesh out `brainshake.train_cnn` with the desired convolutional architecture, data batching, and logging.
-2. Add tests/benchmarks that validate training on a subset of the CHB-MIT windows.
+2. Add unit tests for `EEGDataset.k_fold` split modes (patient, window, seizure).
+3. Add tests/benchmarks that validate training on a subset of the CHB-MIT windows.
+
+ - Windows/seizure/patient-level baselines
+ - CNN models
+ - LSTM

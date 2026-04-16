@@ -11,6 +11,7 @@ from typing import Iterable, List, Tuple, cast, Optional, Sequence
 import joblib
 from torch import Tensor
 from torch.utils.data import Subset
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 from .model import RandomForestSignalClassifier
 from ...data_handling.extract_features import FeatureDict, extract_basic_features
@@ -61,10 +62,11 @@ def evaluate_dataset(
         classifier.fit(train_features, train_labels)
         predictions = classifier.predict(val_features)
 
-        correct = sum(
-            1 for pred, label in zip(predictions, val_labels) if pred == label
-        )
-        accuracy = correct / len(val_labels) if val_labels else 0.0
+        # Calculate metrics using sklearn
+        accuracy = accuracy_score(val_labels, predictions)
+        precision = precision_score(val_labels, predictions, zero_division='warn')
+        recall = recall_score(val_labels, predictions, zero_division='warn')
+        f1 = f1_score(val_labels, predictions, zero_division='warn')
         accuracies.append(accuracy)
 
         model_path = model_dir / f"model_fold_{fold:02d}.joblib"
@@ -73,18 +75,40 @@ def evaluate_dataset(
             display_path = model_path.relative_to(REPO_ROOT)
         except ValueError:
             display_path = model_path
-        print(f"Fold {fold}: accuracy={accuracy:.4f}, saved_model={display_path}")
+        print(f"Fold {fold}: accuracy={accuracy:.4f}, precision={precision:.4f}, recall={recall:.4f}, f1={f1:.4f}, saved_model={display_path}")
         results["folds"].append(
             {
                 "fold": fold,
                 "accuracy": accuracy,
+                "precision": precision,
+                "recall": recall,
+                "f1": f1,
                 "saved_model": str(display_path),
             }
         )
 
+    # Calculate average accuracy
     average = sum(accuracies) / len(accuracies) if accuracies else 0.0
     results["average_accuracy"] = float(average)
     print(f"K-fold ({n_splits}) average accuracy: {average:.4f}")
+    
+    # Calculate average precision, recall, and f1 if they exist in results
+    if results.get("folds") and len(results["folds"]) > 0:
+        precisions = [fold.get("precision", 0.0) for fold in results["folds"]]
+        recalls = [fold.get("recall", 0.0) for fold in results["folds"]]
+        f1s = [fold.get("f1", 0.0) for fold in results["folds"]]
+        
+        avg_precision = sum(precisions) / len(precisions) if precisions else 0.0
+        avg_recall = sum(recalls) / len(recalls) if recalls else 0.0
+        avg_f1 = sum(f1s) / len(f1s) if f1s else 0.0
+        
+        results["average_precision"] = float(avg_precision)
+        results["average_recall"] = float(avg_recall)
+        results["average_f1"] = float(avg_f1)
+        
+        print(f"K-fold average precision: {avg_precision:.4f}")
+        print(f"K-fold average recall: {avg_recall:.4f}")
+        print(f"K-fold average F1: {avg_f1:.4f}")
 
     # write benchmarks JSON
     bench_dir = REPO_ROOT / "out" / "benchmarks"
