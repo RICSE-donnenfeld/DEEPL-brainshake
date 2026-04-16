@@ -1,4 +1,7 @@
 # Epileptic Seizure Detection using EEG
+![CI](https://github.com/RICSE-donnenfeld/DEEPL-brainshake/actions/workflows/ci.yml/badge.svg)
+
+[Project report (PDF)](latex/main.pdf)
 
 <!--toc:start-->
 
