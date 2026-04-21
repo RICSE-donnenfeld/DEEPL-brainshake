@@ -27,25 +27,25 @@ def _persist_results(results: dict, accuracies: Sequence[float]) -> None:
     avg_acc = np.mean(accuracies) if accuracies else 0.0
     results["average_accuracy"] = float(avg_acc)
     print(f"K-fold average accuracy: {avg_acc:.4f}")
-    
+
     # Calculate average precision, recall, and f1 if they exist in results
     if results.get("folds") and len(results["folds"]) > 0:
         precisions = [fold.get("precision", 0.0) for fold in results["folds"]]
         recalls = [fold.get("recall", 0.0) for fold in results["folds"]]
         f1s = [fold.get("f1", 0.0) for fold in results["folds"]]
-        
+
         avg_precision = np.mean(precisions) if precisions else 0.0
         avg_recall = np.mean(recalls) if recalls else 0.0
         avg_f1 = np.mean(f1s) if f1s else 0.0
-        
+
         results["average_precision"] = float(avg_precision)
         results["average_recall"] = float(avg_recall)
         results["average_f1"] = float(avg_f1)
-        
+
         print(f"K-fold average precision: {avg_precision:.4f}")
         print(f"K-fold average recall: {avg_recall:.4f}")
         print(f"K-fold average F1: {avg_f1:.4f}")
-    
+
     bench_dir = REPO_ROOT / "out" / "benchmarks"
     bench_dir.mkdir(parents=True, exist_ok=True)
     out_path = bench_dir / "cnn.json"
@@ -69,7 +69,7 @@ def evaluate_dataset(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     for fold, train_subset, val_subset in dataset.k_fold(
-        n_splits=n_splits, shuffle=True, random_state=random_state
+        n_splits=n_splits, shuffle=True, random_state=random_state, level="window"
     ):
         model_path = model_dir / f"cnn_fold_{fold:02d}.pt"
         train(
@@ -86,7 +86,9 @@ def evaluate_dataset(
 
         loader = _make_loader(val_subset, shuffle=False, num_workers=1)
         criterion = nn.CrossEntropyLoss()
-        loss, accuracy, precision, recall, f1 = _evaluate(model, loader, criterion, device)
+        loss, accuracy, precision, recall, f1 = _evaluate(
+            model, loader, criterion, device
+        )
         accuracies.append(accuracy)
 
         try:
@@ -97,15 +99,17 @@ def evaluate_dataset(
             f"Fold {fold}: loss={loss:.4f}, accuracy={accuracy:.4f}, precision={precision:.4f}, "
             f"recall={recall:.4f}, f1={f1:.4f}, saved_model={display_path}"
         )
-        results["folds"].append({
-            "fold": fold,
-            "loss": float(loss),
-            "accuracy": float(accuracy),
-            "precision": float(precision),
-            "recall": float(recall),
-            "f1": float(f1),
-            "saved_model": str(display_path),
-        })
+        results["folds"].append(
+            {
+                "fold": fold,
+                "loss": float(loss),
+                "accuracy": float(accuracy),
+                "precision": float(precision),
+                "recall": float(recall),
+                "f1": float(f1),
+                "saved_model": str(display_path),
+            }
+        )
 
     _persist_results(results, accuracies)
 
@@ -124,20 +128,20 @@ def evaluate_saved_models(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     for fold, _, val_subset in dataset.k_fold(
-        n_splits=n_splits, shuffle=True, random_state=random_state
+        n_splits=n_splits, shuffle=True, random_state=random_state, level="window"
     ):
         model_path = model_dir / f"cnn_fold_{fold:02d}.pt"
         if not model_path.exists():
-            raise FileNotFoundError(
-                f"Expected checkpoint not found: {model_path}"
-            )
+            raise FileNotFoundError(f"Expected checkpoint not found: {model_path}")
         checkpoint = torch.load(model_path, map_location=device)
         model = SimpleEEGCNN().to(device)
         model.load_state_dict(checkpoint.get("model_state", {}))
 
         loader = _make_loader(val_subset, shuffle=False, num_workers=1)
         criterion = nn.CrossEntropyLoss()
-        loss, accuracy, precision, recall, f1 = _evaluate(model, loader, criterion, device)
+        loss, accuracy, precision, recall, f1 = _evaluate(
+            model, loader, criterion, device
+        )
         accuracies.append(accuracy)
 
         try:
@@ -148,15 +152,17 @@ def evaluate_saved_models(
             f"Fold {fold}: loss={loss:.4f}, accuracy={accuracy:.4f}, precision={precision:.4f}, "
             f"recall={recall:.4f}, f1={f1:.4f}, loaded_model={display_path}"
         )
-        results["folds"].append({
-            "fold": fold,
-            "loss": float(loss),
-            "accuracy": float(accuracy),
-            "precision": float(precision),
-            "recall": float(recall),
-            "f1": float(f1),
-            "loaded_model": str(display_path),
-        })
+        results["folds"].append(
+            {
+                "fold": fold,
+                "loss": float(loss),
+                "accuracy": float(accuracy),
+                "precision": float(precision),
+                "recall": float(recall),
+                "f1": float(f1),
+                "loaded_model": str(display_path),
+            }
+        )
 
     _persist_results(results, accuracies)
 
