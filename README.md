@@ -1,4 +1,5 @@
 # Epileptic Seizure Detection using EEG
+
 ![CI](https://github.com/RICSE-donnenfeld/DEEPL-brainshake/actions/workflows/ci.yml/badge.svg)
 
 [Project report (PDF)](latex/main.pdf)
@@ -106,6 +107,7 @@ python -m brainshake.cli run visualize-data
 2. Add unit tests for `EEGDataset.k_fold` split modes (patient, window, seizure).
 3. Add tests/benchmarks that validate training on a subset of the CHB-MIT windows.
 
- - Windows/seizure/patient-level baselines
- - CNN models
- - LSTM
+- Windows/seizure/patient-level baselines
+- CNN models
+- LSTM
+- Compare to existing literature
