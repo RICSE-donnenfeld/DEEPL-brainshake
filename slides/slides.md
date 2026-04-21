@@ -32,7 +32,7 @@ style: |
 
 ### Project Report
 
-![w:600](../out/plots/average_accuracy.png)
+<img src="../out/plots/average_accuracy.png" width="40%">
 
 ---
 
@@ -60,8 +60,7 @@ Automated seizure detection aids clinical diagnosis. We compare a **threshold al
 
 ---
 
-![bg left:50%](../out/data_analyze/simple_comparison.png)
-![bg left:50%](../out/data_analyze/metric_trends.png)
+<img src="../out/data_analyze/simple_comparison.png" width="45%"> <img src="../out/data_analyze/metric_trends.png" width="45%">
 
 # Dataset Description
 
@@ -83,9 +82,7 @@ Automated seizure detection aids clinical diagnosis. We compare a **threshold al
 
 # Methodology: Diagrams
 
-![h:150](../out/plots/threshold.png)
-![h:150](../out/plots/randomforest.png)
-![h:150](../out/plots/cnn.png)
+<img src="../out/plots/threshold.png" width="30%"> <img src="../out/plots/randomforest.png" width="30%"> <img src="../out/plots/cnn.png" width="30%">
 
 ---
 
@@ -102,8 +99,7 @@ Automated seizure detection aids clinical diagnosis. We compare a **threshold al
 
 ---
 
-![bg right:50%](../out/plots/accuracy_by_fold.png)
-![bg right:50%](../out/plots/average_accuracy.png)
+<img src="../out/plots/accuracy_by_fold.png" width="45%"> <img src="../out/plots/average_accuracy.png" width="45%">
 
 # Results
 
