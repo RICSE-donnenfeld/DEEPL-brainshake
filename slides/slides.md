@@ -53,9 +53,9 @@ style: |
 # Abstract
 
 - **4 models**: threshold, random forest, CNN, LSTM
-- **Patient-level** and **seizure-level** cross-validation
-- 2-fold pilot: CNN leads at 79.7% acc
-- LSTM results pending from GPU cluster
+- **Patient-level** and **seizure-level** cross-validation (5-fold)
+- CNN: 86.3% acc (patient-level); LSTM: **97.2% acc, 0.985 F1** (seizure-level)
+- Window-level CV produces degenerate results
 
 ---
 
@@ -286,8 +286,10 @@ High cross-patient variance across all models; CNN ranges 79–93%.
 | Threshold | patient | 75.5%     | —         |
 | RF        | patient | 69.0%     | —         |
 | CNN       | patient | 86.3%     | 0.554     |
+| CNN       | window  | 97.7%     | 0.000     |
 | CNN       | seizure | 80.1%     | 0.888     |
 | LSTM-std  | seizure | **97.2%** | **0.985** |
+| LSTM-std  | patient | 99.5%     | 0.983     |
 
 </div>
 
@@ -302,6 +304,34 @@ CNN and LSTM under window-level CV: **97–100% accuracy but 0% F1**
 - Round-robin assignment creates unreliable per-fold class ratios
 - Models learn to predict "non-seizure" for everything → trivially high accuracy
 - **Window-level CV is unsuitable** for this dataset
+
+---
+
+# Results: CNN Split-Level Comparison
+
+<div class="columns">
+
+<div>
+
+<img src="../out/plots/cnn_levels_avg.png" width="100%">
+
+</div>
+
+<div>
+
+| CV Level | Avg Acc | Avg F1 |
+| -------- | ------- | ------ |
+| patient  | 86.3%   | 0.554  |
+| window   | 97.7%   | 0.000  |
+| seizure  | 80.1%   | 0.888  |
+
+> Patient-level: meaningful but variable.
+> Window-level: degenerate.
+> Seizure-level: high precision, lower recall.
+
+</div>
+
+</div>
 
 ---
 
