@@ -12,6 +12,18 @@ This checklist freezes a **single reproducible run** (metrics + plots) and makes
   - `conda activate epilepsy-dl`
   - `python -m pip install -e .`
 
+### Notes for the UAB cluster / Linux hosts
+
+- Many cluster images only provide `python3` (no `python` alias). In that case, replace `python` with `python3` in all commands below.
+- Run commands from the **repo root** (the folder that contains `pyproject.toml` and `src/`).
+- If you do *not* install the package (no `pip install -e .`), run with:
+
+  ```bash
+  export PYTHONPATH="$PWD/src"
+  ```
+
+  This also helps avoid import shadowing if you have a `~/brainshake/` directory in your home.
+
 ## Option A (recommended): explicit final pipeline
 
 Run these commands from the repo root.
@@ -21,6 +33,13 @@ Run these commands from the repo root.
 ```bash
 python -m brainshake run analyze-data -- --all-patients
 python -m brainshake run visualize-data -- --summary-path out/data_analyze/summary.json --output-dir out/data_analyze
+```
+
+Cluster equivalent (if `python` is missing):
+
+```bash
+python3 -m brainshake run analyze-data -- --all-patients
+python3 -m brainshake run visualize-data -- --summary-path out/data_analyze/summary.json --output-dir out/data_analyze
 ```
 
 Expected outputs:
