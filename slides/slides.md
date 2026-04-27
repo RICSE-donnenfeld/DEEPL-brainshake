@@ -118,5 +118,4 @@ Automated seizure detection aids clinical diagnosis. We compare a **threshold al
 
 # Thank You
 
-**Questions?**
-Refer to `latex/main.pdf` for the full technical story.
+**Any Questions?**
