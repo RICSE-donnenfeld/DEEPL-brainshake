@@ -83,7 +83,7 @@ def evaluate_dataset(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     for fold, train_subset, val_subset in dataset.k_fold(
-        n_splits=n_splits, shuffle=True, random_state=random_state, level="window"
+        n_splits=n_splits, shuffle=True, random_state=random_state, level="patient"
     ):
         model_path = model_dir / f"cnn_fold_{fold:02d}.pt"
         train(
@@ -208,7 +208,7 @@ def evaluate_saved_models(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     for fold, train_subset, val_subset in dataset.k_fold(
-        n_splits=n_splits, shuffle=True, random_state=random_state, level="window"
+        n_splits=n_splits, shuffle=True, random_state=random_state, level="patient"
     ):
         model_path = model_dir / f"cnn_fold_{fold:02d}.pt"
         if not model_path.exists():
