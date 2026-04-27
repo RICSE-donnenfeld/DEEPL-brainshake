@@ -11,26 +11,24 @@ from brainshake.data_handling.load_data import EEGDataset
 
 @pytest.fixture
 def synthetic_two_patients(monkeypatch):
-    # Create synthetic dataset: 2 patients, 6 windows and 4 windows
     data = np.zeros((10, 1, 1), dtype=np.float32)
     labels = np.array([0, 1, 0, 1, 0, 0, 0, 1, 0, 0], dtype=np.int64)
     patient_index = np.array([1] * 6 + [2] * 4, dtype=np.int64)
     monkeypatch.setattr(
         EEGDataset, "_load_all_patients", lambda self: (data, labels, patient_index)
     )
-    return EEGDataset(data_dir=".")
+    return EEGDataset(data_dir=".", cache=False)
 
 
 @pytest.fixture
 def synthetic_one_patient(monkeypatch):
-    # Single patient episodes: contiguous seizures at indices [2,3], [6], [8,9]
     data = np.zeros((12, 1, 1), dtype=np.float32)
     labels = np.array([0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0], dtype=np.int64)
     patient_index = np.ones(12, dtype=np.int64)
     monkeypatch.setattr(
         EEGDataset, "_load_all_patients", lambda self: (data, labels, patient_index)
     )
-    return EEGDataset(data_dir=".")
+    return EEGDataset(data_dir=".", cache=False)
 
 
 def test_k_fold_patient_level(synthetic_two_patients):
