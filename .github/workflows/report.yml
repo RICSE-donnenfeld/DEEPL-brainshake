@@ -7,8 +7,6 @@ on:
       - "out/mermaid/**"
       - "out/plots/**"
       - "out/data_analyze/**"
-    paths-ignore:
-      - "latex/main.pdf"
   workflow_dispatch:
 
 permissions:
