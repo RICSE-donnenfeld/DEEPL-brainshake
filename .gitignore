@@ -16,11 +16,22 @@ __pycache__/
 *.so
 
 # Run artifacts
-out/
+out/*
+
+# Keep report figures that are generated into out/plots/.
+!out/plots/
+!out/plots/*.png
+
+# Optional: allow mermaid render outputs if needed by the report.
+!out/mermaid/
+!out/mermaid/*.png
 
 # Ad-hoc exported plots in repo root
 seizures_per_patient.png
 windows_per_patient.png
+
+# Local workspace archives
+brainshake-*.tar.gz
 
 # Distribution / packaging
 .Python
