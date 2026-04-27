@@ -166,11 +166,11 @@ Epileptic seizures = abnormal brain electrical activity detectable via EEG.
 
 <img src="../out/mermaid/cv_strategies.svg" width="90%">
 
-| Level | Split by | Leakage | Used by |
-|---|---|---|---|
-| Patient | whole patient | None | Threshold, RF, CNN |
-| Window | window round-robin | Low (±4) | CNN |
-| Seizure | whole episode | None | LSTM |
+| Level   | Split by           | Leakage  | Used by            |
+| ------- | ------------------ | -------- | ------------------ |
+| Patient | whole patient      | None     | Threshold, RF, CNN |
+| Window  | window round-robin | Low (±4) | CNN                |
+| Seizure | whole episode      | None     | LSTM               |
 
 ---
 
@@ -187,13 +187,13 @@ Epileptic seizures = abnormal brain electrical activity detectable via EEG.
 
 EEG oscillates around 0 → **mean** collapses amplitude. **Std** preserves it.
 
-| Pool | Dim | Speed | Preserves |
-|---|---|---|---|
-| `std` (default) | 21 | Fast | Channel variance |
-| `mean` | 21 | Fast | Near-zero — risky |
-| `mean_std` | 42 | Fast | Center + spread |
-| `conv_proj` | 32 | Medium | Learned features |
-| `none` | 2688 | Very slow | Full waveform |
+| Pool            | Dim  | Speed     | Preserves         |
+| --------------- | ---- | --------- | ----------------- |
+| `std` (default) | 21   | Fast      | Channel variance  |
+| `mean`          | 21   | Fast      | Near-zero — risky |
+| `mean_std`      | 42   | Fast      | Center + spread   |
+| `conv_proj`     | 32   | Medium    | Learned features  |
+| `none`          | 2688 | Very slow | Full waveform     |
 
 ---
 
@@ -235,27 +235,27 @@ Conv1d projection option replaces hand-crafted pooling:
 
 # Hyperparameters
 
-| Parameter | Threshold | RF | CNN | LSTM |
-|---|---|---|---|---|
-| Trees/layers | — | 200 | [32,64,128] | 2 LSTM |
-| Hidden size | — | — | — | 128 |
-| Pooling | — | — | — | std / conv_proj |
-| Class weight | — | balanced | balanced | balanced |
-| LR | — | — | 1e-3 | 1e-3 |
-| Batch size | — | — | 32 | 32 |
-| Epochs | — | — | 2 | 2 |
-| Dropout | — | — | 0.3 | 0.3 |
-| CV level | patient | patient | patient | seizure (ctx=20) |
+| Parameter    | Threshold | RF       | CNN         | LSTM             |
+| ------------ | --------- | -------- | ----------- | ---------------- |
+| Trees/layers | —         | 200      | [32,64,128] | 2 LSTM           |
+| Hidden size  | —         | —        | —           | 128              |
+| Pooling      | —         | —        | —           | std / conv_proj  |
+| Class weight | —         | balanced | balanced    | balanced         |
+| LR           | —         | —        | 1e-3        | 1e-3             |
+| Batch size   | —         | —        | 32          | 32               |
+| Epochs       | —         | —        | 2           | 2                |
+| Dropout      | —         | —        | 0.3         | 0.3              |
+| CV level     | patient   | patient  | patient     | seizure (ctx=20) |
 
 ---
 
 # Experiment Grid
 
-| Script | Runs | ~Time |
-|---|---|---|
-| `exp1_cnn_levels` | CNN × 3 levels | ~1.5h |
+| Script                  | Runs                      | ~Time |
+| ----------------------- | ------------------------- | ----- |
+| `exp1_cnn_levels`       | CNN × 3 levels            | ~1.5h |
 | `exp2_lstm_levels_pool` | LSTM × 3 levels + 4 pools | ~5–6h |
-| `exp3_lstm_nsl` | LSTM × 4 NS lengths | ~3.5h |
+| `exp3_lstm_nsl`         | LSTM × 4 NS lengths       | ~3.5h |
 
 All write to `out/benchmarks/` with descriptive suffixes.
 
@@ -281,13 +281,13 @@ High cross-patient variance across all models; CNN ranges 79–93%.
 
 <div>
 
-| Model | CV | Acc | F1 |
-|---|---|---|---|
-| Threshold | patient | 75.5% | — |
-| RF | patient | 69.0% | — |
-| CNN | patient | 86.3% | 0.554 |
-| CNN | seizure | 80.1% | 0.888 |
-| LSTM-std | seizure | **97.2%** | **0.985** |
+| Model     | CV      | Acc       | F1        |
+| --------- | ------- | --------- | --------- |
+| Threshold | patient | 75.5%     | —         |
+| RF        | patient | 69.0%     | —         |
+| CNN       | patient | 86.3%     | 0.554     |
+| CNN       | seizure | 80.1%     | 0.888     |
+| LSTM-std  | seizure | **97.2%** | **0.985** |
 
 </div>
 
@@ -317,12 +317,12 @@ CNN and LSTM under window-level CV: **97–100% accuracy but 0% F1**
 
 <div>
 
-| Pooling | Avg Acc | Avg F1 |
-|---|---|---|
-| std (21-d) | 97.2% | 0.985 |
-| mean (21-d) | **97.8%** | **0.988** |
-| conv_proj (32-d) | 93.3% | 0.963 |
-| mean_std (42-d) | 61.2% | 0.601 |
+| Pooling          | Avg Acc   | Avg F1    |
+| ---------------- | --------- | --------- |
+| std (21-d)       | 97.2%     | 0.985     |
+| mean (21-d)      | **97.8%** | **0.988** |
+| conv_proj (32-d) | 93.3%     | 0.963     |
+| mean_std (42-d)  | 61.2%     | 0.601     |
 
 > mean_std unstable (2/5 folds fail)
 
@@ -344,12 +344,12 @@ CNN and LSTM under window-level CV: **97–100% accuracy but 0% F1**
 
 <div>
 
-| NSL | Avg Acc | Avg F1 |
-|---|---|---|
-| 5 | **98.8%** | **0.994** |
-| 10 | 96.1% | 0.979 |
-| 20 | 5.5% | 0.000 |
-| 50 | 5.5% | 0.000 |
+| NSL | Avg Acc   | Avg F1    |
+| --- | --------- | --------- |
+| 5   | **98.8%** | **0.994** |
+| 10  | 96.1%     | 0.979     |
+| 20  | 5.5%      | 0.000     |
+| 50  | 5.5%      | 0.000     |
 
 > NSL ≥ 20 → training collapse
 
@@ -384,3 +384,4 @@ CNN and LSTM under window-level CV: **97–100% accuracy but 0% F1**
 # Thank You
 
 **Any Questions?**
+
