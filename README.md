@@ -2,7 +2,7 @@
 
 ![CI](https://github.com/RICSE-donnenfeld/DEEPL-brainshake/actions/workflows/ci.yml/badge.svg)
 
-[Project report (PDF)](latex/main.pdf)
+📄 [Project report (PDF)](latex/main.pdf) &nbsp;|&nbsp; 📊 [Slides (PDF)](slides/slides.pdf)
 
 <!--toc:start-->
 
