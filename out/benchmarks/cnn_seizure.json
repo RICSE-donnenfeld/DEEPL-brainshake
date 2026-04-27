@@ -1,0 +1,53 @@
+{
+  "folds": [
+    {
+      "fold": 0,
+      "loss": 0.9209108153966696,
+      "accuracy": 0.6605516194331984,
+      "precision": 1.0,
+      "recall": 0.6605516194331984,
+      "f1": 0.7955809523809524,
+      "saved_model": "out/models/cnn/cnn_fold_00.pt"
+    },
+    {
+      "fold": 1,
+      "loss": 0.40972377249318453,
+      "accuracy": 0.8726502027276078,
+      "precision": 1.0,
+      "recall": 0.8726502027276078,
+      "f1": 0.9319948823934653,
+      "saved_model": "out/models/cnn/cnn_fold_01.pt"
+    },
+    {
+      "fold": 2,
+      "loss": 0.5200401874225771,
+      "accuracy": 0.815,
+      "precision": 1.0,
+      "recall": 0.815,
+      "f1": 0.8980716253443526,
+      "saved_model": "out/models/cnn/cnn_fold_02.pt"
+    },
+    {
+      "fold": 3,
+      "loss": 0.3309898609180412,
+      "accuracy": 0.868058769088385,
+      "precision": 1.0,
+      "recall": 0.868058769088385,
+      "f1": 0.9293698714971358,
+      "saved_model": "out/models/cnn/cnn_fold_03.pt"
+    },
+    {
+      "fold": 4,
+      "loss": 0.47819958859622885,
+      "accuracy": 0.7907685098406748,
+      "precision": 1.0,
+      "recall": 0.7907685098406748,
+      "f1": 0.8831610624100483,
+      "saved_model": "out/models/cnn/cnn_fold_04.pt"
+    }
+  ],
+  "average_accuracy": 0.8014058202179731,
+  "average_precision": 1.0,
+  "average_recall": 0.8014058202179731,
+  "average_f1": 0.8876356788051909
+}

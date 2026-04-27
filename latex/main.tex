@@ -72,7 +72,7 @@ in Electro-Encephalogram Signals}\\[4pt]
 This report investigates the automated detection of epileptic seizures in EEG signals using four approaches:
 a basic threshold-based algorithm operating on raw signal statistics, a random forest trained on eight handcrafted time-domain features, a one-dimensional convolutional neural network (CNN) trained on raw signal windows, and a recurrent LSTM that processes windows as temporal episodes.
 EEG recordings from 24 patients are segmented into 1\,s windows, totalling \num{571905} samples (\num{3480} seizure windows) and evaluated under patient-level and seizure-level cross-validation.
-In a 2-fold pilot, the CNN achieves the highest average accuracy, followed by the threshold and random forest baselines; the LSTM exploits the sequential structure of seizure episodes and its full evaluation is pending.
+Under 5-fold patient-level CV, the CNN achieves 86.3\% average accuracy; under seizure-level CV, the LSTM (std pooling) achieves 97.2\% accuracy and 0.985 F1, dramatically outperforming all per-window baselines.
 \end{abstract}
 
 \tableofcontents
@@ -244,7 +244,6 @@ Key development steps:
 Models are evaluated under 5-fold patient-level cross-validation (CNN and random forest) or seizure-level cross-validation (LSTM).
 Windows from each patient appear in exactly one test fold so we avoid data leakage.
 We report accuracy, precision, recall, and F1 for each fold and average across folds.
-At the time of writing, pilot runs with 2 folds are available; full 5-fold results will be appended once the GPU experiments finish.
 \label{sec:experiments}
 
 
@@ -274,45 +273,154 @@ CV level & patient & patient & seizure (context=20) \\
 % ==========================================================
 \section{Results}
 \label{sec:results}
+
+\subsection{Main comparison (patient-level CV)}
+
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.8\linewidth]{accuracy_by_fold.png}
-\caption{CNN accuracy per fold}
+\caption{Accuracy per fold for the main comparison models (patient-level).}
 \label{fig:accuracy_by_fold}
 \end{figure}
 
-Per-fold accuracy reveals high variability across folds: the CNN achieves 94.5\% on one fold but only 64.8\% on another, reflecting the difficulty of generalising across patients that the model has never seen.
-
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\linewidth]{average_accuracy.png}
-\caption{Average CNN accuracy across folds}
+\includegraphics[width=0.7\linewidth]{average_accuracy.png}
+\caption{Average accuracy across folds for threshold, random forest, CNN (patient-level), and LSTM-std (seizure-level).}
 \label{fig:avg_accuracy}
 \end{figure}
 
-The average accuracy plot aggregates fold results, comparing the threshold, random forest, and CNN pipelines. In the current 2-fold pilot run, the CNN achieves the highest average accuracy (\num{0.797}), followed by the threshold baseline (\num{0.766}) and the random forest (\num{0.758}). Full 5-fold cross-validation results will be reported once the GPU experiments complete.
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+Model & Avg Accuracy & Avg Precision & Avg Recall & Avg F1 \\
+\midrule
+Threshold (patient) & 0.755 & -- & -- & -- \\
+Random Forest (patient) & 0.690 & -- & -- & -- \\
+CNN (patient) & \num{0.863} & \num{0.561} & \num{0.606} & \num{0.554} \\
+CNN (window) & \num{0.977} & 0.000 & 0.000 & 0.000 \\
+CNN (seizure) & \num{0.801} & 1.000 & \num{0.801} & \num{0.888} \\
+LSTM-std (seizure) & \num{0.972} & 1.000 & \num{0.970} & \num{0.985} \\
+LSTM-std (patient) & \num{0.995} & 1.000 & \num{0.966} & \num{0.983} \\
+\bottomrule
+\end{tabular}
+\caption{5-fold cross-validation results. Window-level CNN and LSTM achieve high accuracy but zero recall (degenerate predictions). Threshold and RF report accuracy only.}
+\label{tab:main_results}
+\end{table}
 
+Per-fold accuracy reveals high variability for the CNN under patient-level CV: fold accuracies range from 83\% to 93\%, with one fold as low as 79\%.
+The random forest and threshold baselines also vary across patients, with the threshold achieving 75.5\% average accuracy and the random forest 69.0\%.
 
-\noindent \textbf{Summary.} The CNN accuracy per fold and average accuracy charts show that deep models can outperform classical baselines, but also reveal substantial cross-patient variability.
-The LSTM adds a sequential perspective: by processing windows in temporal order within episodes, it can exploit the pre-ictal $\rightarrow$ ictal $\rightarrow$ post-ictal transition that individual-window classifiers ignore.
-These plots are based on a 2-fold pilot run; full 5-fold results are pending.
-The threshold classifier baseline achieves an average accuracy of \num{0.766}, the random forest \num{0.758}, and the CNN \num{0.797}.
+\subsection{Window-level CV degeneracy}
+
+Both CNN and LSTM evaluated under window-level CV achieve near-perfect accuracy but zero precision, recall, and F1.
+This occurs because round-robin window assignment places individual seizure windows in the validation set surrounded by non-seizure windows from the same patient; the models learn to predict non-seizure for nearly all windows (the majority class at 99.4\%) and still achieve high overall accuracy.
+
+\subsection{LSTM pooling comparison (seizure-level)}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{lstm_pool_comparison.png}
+\caption{Per-fold accuracy for LSTM pooling options evaluated under seizure-level CV.}
+\label{fig:lstm_pool}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\linewidth]{lstm_pool_avg.png}
+\caption{Average accuracy and F1 by LSTM pooling option (seizure-level).}
+\label{fig:lstm_pool_avg}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+Pooling & Avg Accuracy & Avg Precision & Avg Recall & Avg F1 \\
+\midrule
+std (21-d) & \num{0.972} & 1.000 & \num{0.970} & \num{0.985} \\
+mean (21-d) & \num{0.978} & 1.000 & \num{0.977} & \num{0.988} \\
+conv\_proj (32-d) & \num{0.933} & 1.000 & \num{0.929} & \num{0.963} \\
+mean\_std (42-d) & \num{0.612} & 0.800 & \num{0.587} & \num{0.601} \\
+\bottomrule
+\end{tabular}
+\caption{LSTM pooling comparison under 5-fold seizure-level CV. Mean pooling slightly outperforms std; mean\_std is unstable (2/5 folds degenerate).}
+\label{tab:lstm_pool_results}
+\end{table}
+
+All LSTM variants (except mean\_std) achieve near-perfect precision under seizure-level CV because seizure episodes in the validation set are always surrounded by context windows, making the false-positive rate negligible.
+Mean\_std pooling is unstable: 2 out of 5 folds produce degenerate predictions with near-zero accuracy.
+
+\subsection{Non-seizure episode length sweep}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\linewidth]{lstm_nsl_avg.png}
+\caption{Average accuracy for LSTM-std with varying non-seizure episode lengths.}
+\label{fig:lstm_nsl}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+NSL & Avg Accuracy & Avg Precision & Avg Recall & Avg F1 \\
+\midrule
+5 & \num{0.988} & 1.000 & \num{0.987} & \num{0.994} \\
+10 & \num{0.961} & 1.000 & \num{0.959} & \num{0.979} \\
+20 & \num{0.055} & 0.000 & 0.000 & 0.000 \\
+50 & \num{0.055} & 0.000 & 0.000 & 0.000 \\
+\bottomrule
+\end{tabular}
+\caption{LSTM-std seizure-level results with different non-seizure episode lengths (NSL). NSL$\geq$20 causes degenerate predictions.}
+\label{tab:nsl_results}
+\end{table}
+
+Short non-seizure episodes (NSL=5, 10) work well; NSL$\geq$20 causes the LSTM to collapse to predicting non-seizure for all windows, likely because longer non-seizure episodes overwhelm the gradient signal.
+
+\subsection{CNN split-level comparison}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{cnn_levels_accuracy.png}
+\caption{CNN accuracy per fold under patient, window, and seizure-level splits.}
+\label{fig:cnn_levels}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\linewidth]{cnn_levels_avg.png}
+\caption{Average accuracy and F1 by CNN split level.}
+\label{fig:cnn_levels_avg}
+\end{figure}
+
+The CNN under patient-level CV achieves meaningful per-window discrimination (F1=0.554), while window-level CV produces degenerate results (zero recall). Seizure-level CV gives the CNN perfect precision but lower recall (0.801) because the validation set includes context windows around seizure episodes.
 
 
 % ==========================================================
 \section{Discussion}
-Our pilot results show that the CNN can outperform the random forest in average accuracy, but with high variability across folds—the model struggles on certain patients.
-The deep model captures temporal patterns in EEG signals that simple features cannot fully represent, yet patient heterogeneity remains a challenge.
-LSTM results are pending and will be reported once the ongoing GPU experiments finish.
+Our results show that the LSTM under seizure-level CV achieves the best performance (97.2\% accuracy, 0.985 F1), dramatically outperforming all per-window classifiers.
+The CNN achieves 86.3\% accuracy under patient-level CV but with high cross-patient variability (F1=0.554), suggesting it learns features that do not generalize well across unseen patients.
+The threshold baseline (75.5\%) outperforms the random forest (69.0\%), indicating that simple signal variability statistics are competitive with handcrafted feature engineering for this task.
+
+Window-level CV produces degenerate results for both CNN and LSTM: round-robin assignment breaks the temporal structure of seizure episodes and makes the class imbalance overwhelming, causing models to predict non-seizure for nearly all windows.
+This highlights the importance of choosing an appropriate CV strategy.
+
+The LSTM results under patient-level CV (99.5\% accuracy) should be interpreted with caution: because entire patients appear in one fold, the model may leverage patient-specific patterns that do not generalize. Seizure-level CV with context provides a more realistic evaluation.
+
+Mean pooling slightly outperforms std pooling for the LSTM (0.988 vs 0.985 F1), but mean\_std pooling is unstable. Convolutional projection (conv\_proj) provides a good trade-off between expressiveness and stability (0.963 F1).
+The non-seizure episode length sweep reveals a critical threshold: NSL$\leq$10 works well, but NSL$\geq$20 causes training collapse.
 \label{sec:discussion}
 
 
 % ==========================================================
 \section{Conclusion}
 We compared a threshold baseline, a feature-based random forest, an end-to-end CNN, and a temporal LSTM for seizure detection in EEG.
-In a 2-fold pilot, the CNN achieved the highest average accuracy (\num{0.797}), outperforming both the threshold baseline (\num{0.766}) and the random forest (\num{0.758}), though cross-patient variability was high.
-The LSTM leverages seizure-level splits to preserve episode integrity and exploit temporal structure; its results are pending from ongoing GPU experiments.
-Future work will compare all models under matching seizure-level splits and explore multichannel spatial information combined with longer temporal context.
+Under 5-fold patient-level CV, the CNN achieves 86.3\% accuracy but with moderate F1 (0.554); under seizure-level CV, the LSTM achieves 97.2\% accuracy and 0.985 F1, dramatically outperforming all per-window baselines.
+Window-level CV produces degenerate results for both deep models, confirming that appropriate cross-validation is critical.
+Mean and std pooling work best for the LSTM; NSL$\leq$10 is essential to prevent training collapse.
+Future work should explore multichannel spatial information and longer temporal context within the LSTM framework.
 \label{sec:conclusion}
 
 

@@ -1,0 +1,51 @@
+{
+  "folds": [
+    {
+      "loss": 0.006885468775069506,
+      "accuracy": 0.06172839506172839,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "fold": 0
+    },
+    {
+      "loss": 0.004885854024485625,
+      "accuracy": 0.044886463650765714,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "fold": 1
+    },
+    {
+      "loss": 0.0064902196739927915,
+      "accuracy": 0.06091370558375635,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "fold": 2
+    },
+    {
+      "loss": 0.006751148567659854,
+      "accuracy": 0.05156901470265526,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "fold": 3
+    },
+    {
+      "loss": 0.007512270713504528,
+      "accuracy": 0.05533421868083223,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "fold": 4
+    }
+  ],
+  "average_accuracy": 0.054886359535947594,
+  "average_precision": 0.0,
+  "average_recall": 0.0,
+  "average_f1": 0.0,
+  "pool": "std",
+  "context": 20,
+  "non_seizure_len": 50
+}

@@ -253,46 +253,87 @@ All write to `out/benchmarks/` with descriptive suffixes.
 
 ---
 
-# Results: Accuracy per Fold
+# Results: Accuracy per Fold (Patient-Level)
 
 <img src="../out/plots/accuracy_by_fold.png" width="65%">
 
-CNN ranges from **64.8%** (fold 0) to **94.5%** (fold 1) — high variance across patients.
+High cross-patient variance across all models; CNN ranges 79–93%.
 
 ---
 
-# Results: Pilot Comparison (2 folds)
+# Results: Main Comparison (5-fold)
 
 <img src="../out/plots/average_accuracy.png" width="48%">
 
-| Model | Avg Acc | Avg Prec | Avg Recall | Avg F1 |
-|---|---|---|---|---|
-| Threshold | 76.6% | 59.2% | 84.9% | 0.615 |
-| RF | 75.8% | 51.6% | 42.4% | 0.378 |
-| CNN | 79.7% | 53.2% | 79.5% | 0.597 |
+| Model | CV Level | Avg Acc | Avg F1 |
+|---|---|---|---|
+| Threshold | patient | 75.5% | — |
+| Random Forest | patient | 69.0% | — |
+| CNN | patient | 86.3% | 0.554 |
+| CNN | seizure | 80.1% | 0.888 |
+| LSTM-std | seizure | **97.2%** | **0.985** |
 
-> Full 5-fold + LSTM results pending.
+---
+
+# Results: Window-Level CV Degeneracy
+
+CNN and LSTM under window-level CV: **97–100% accuracy but 0% F1**
+
+- Round-robin assignment isolates seizure windows among non-seizure
+- Models learn to predict "non-seizure" for everything → trivially high accuracy
+- **Window-level CV is unsuitable** for this imbalanced task
+
+---
+
+# Results: LSTM Pooling (Seizure-Level)
+
+<img src="../out/plots/lstm_pool_avg.png" width="65%">
+
+| Pooling | Avg Acc | Avg F1 |
+|---|---|---|
+| std (21-d) | 97.2% | 0.985 |
+| mean (21-d) | **97.8%** | **0.988** |
+| conv_proj (32-d) | 93.3% | 0.963 |
+| mean_std (42-d) | 61.2% | 0.601 |
+
+> mean_std is unstable (2/5 folds degenerate).
+
+---
+
+# Results: Non-Seizure Length Sweep
+
+<img src="../out/plots/lstm_nsl_avg.png" width="55%">
+
+| NSL | Avg Acc | Avg F1 |
+|---|---|---|
+| 5 | **98.8%** | **0.994** |
+| 10 | 96.1% | 0.979 |
+| 20 | 5.5% | 0.000 |
+| 50 | 5.5% | 0.000 |
+
+> NSL ≥ 20 causes training collapse.
 
 ---
 
 # Key Observations
 
-- **CNN leads** in pilot but with high cross-patient variance
-- **Threshold** outperforms RF (high recall, decent F1)
-- **RF** has low recall — many seizure windows missed
-- **Class imbalance** is severe (0.6% seizure)
-- LSTM may exploit temporal structure → pending
+- **LSTM (seizure-level)** dominates: 97.2% acc, 0.985 F1
+- **CNN (patient-level)**: 86.3% acc but F1 only 0.554 — low recall on some patients
+- **Window-level CV** produces degenerate results for all models
+- **Threshold (75.5%)** outperforms RF (69.0%)
+- **Mean & std pooling** both work well; mean_std is unstable
+- **NSL ≥ 20** causes LSTM training collapse
 
 ---
 
 # Conclusion
 
-- CNN: highest pilot accuracy (**79.7%**) but high variance
-- Threshold (76.6%) slightly outperforms RF (75.8%)
-- **LSTM** results pending from GPU cluster
-- **std pooling** preserves amplitude; mean collapses to ~0
-- **context=20** gives realistic class mix in seizure-level CV
-- **Future**: compare all models under matching seizure-level splits
+- LSTM (seizure-level) achieves best results: **97.2% acc, 0.985 F1**
+- CNN (patient-level): 86.3% acc, 0.554 F1 — high variance across patients
+- Window-level CV is degenerate — inappropriate for imbalanced EEG
+- Mean pooling slightly outperforms std for LSTM
+- **NSL ≤ 10** is essential; NSL ≥ 20 causes collapse
+- **Future**: explore multichannel spatial info, longer temporal context
 
 ---
 
