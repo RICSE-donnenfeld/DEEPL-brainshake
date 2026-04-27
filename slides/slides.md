@@ -409,7 +409,7 @@ CNN and LSTM under window-level CV: **97–100% accuracy but 0% F1**
 - Window-level CV is degenerate — poor class ratios per fold
 - Mean pooling slightly outperforms std for LSTM
 - **NSL ≤ 10** is essential; NSL ≥ 20 causes collapse
-- **Future**: explore multichannel spatial info, longer temporal context
+- **Future**: remove pre/post-ictal windows, explore multichannel spatial info, longer temporal context
 
 ---
 

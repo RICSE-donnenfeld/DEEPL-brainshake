@@ -424,7 +424,7 @@ We compared a threshold baseline, a feature-based random forest, an end-to-end C
 Under 5-fold patient-level CV, the CNN achieves 86.3\% accuracy but with moderate F1 (0.554); under seizure-level CV, the LSTM achieves 97.2\% accuracy and 0.985 F1, dramatically outperforming all per-window baselines.
 Window-level CV produces degenerate results for both deep models, confirming that appropriate cross-validation is critical.
 Mean and std pooling work best for the LSTM; NSL$\leq$10 is essential to prevent training collapse.
-Future work should explore multichannel spatial information and longer temporal context within the LSTM framework.
+Future work should explore multichannel spatial information, longer temporal context within the LSTM framework, and the removal of pre-ictal and post-ictal windows near seizure boundaries to eliminate ambiguous training signals and improve label purity.
 \label{sec:conclusion}
 
 
