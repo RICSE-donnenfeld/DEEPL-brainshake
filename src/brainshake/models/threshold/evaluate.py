@@ -35,6 +35,44 @@ DEFAULT_N_SPLITS = 4
 DEFAULT_RANDOM_STATE = 2026
 
 
+def _confusion_and_metrics(
+    y_true: Sequence[int],
+    y_pred: Sequence[int],
+    positive_class: int = 1,
+) -> tuple[dict, dict]:
+    pos = int(positive_class)
+    tp = fp = tn = fn = 0
+    for yt, yp in zip(y_true, y_pred):
+        yt_pos = int(yt) == pos
+        yp_pos = int(yp) == pos
+        if yp_pos and yt_pos:
+            tp += 1
+        elif yp_pos and not yt_pos:
+            fp += 1
+        elif (not yp_pos) and (not yt_pos):
+            tn += 1
+        else:
+            fn += 1
+
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    specificity = tn / (tn + fp) if (tn + fp) else 0.0
+    f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
+    balanced_accuracy = 0.5 * (recall + specificity)
+
+    confusion = {"tp": int(tp), "fp": int(fp), "tn": int(tn), "fn": int(fn)}
+    metrics = {
+        "precision": float(precision),
+        "recall": float(recall),
+        "specificity": float(specificity),
+        "f1": float(f1),
+        "balanced_accuracy": float(balanced_accuracy),
+        "support_pos": int(tp + fn),
+        "support_neg": int(tn + fp),
+    }
+    return confusion, metrics
+
+
 def extract_features_from_subset(subset: Any) -> Tuple[List[FeatureDict], List[int]]:
     features: List[FeatureDict] = []
     labels: List[int] = []
@@ -126,14 +164,17 @@ def compute_thresholds(
 
 def evaluate_dataset(dataset: Any, n_splits: int = 5, random_state: int = 42) -> None:
     accuracies: List[float] = []
+    confusion_total = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
     results: dict = {
         "meta": {
             "n_splits": int(n_splits),
             "random_state": int(random_state),
             "patient_ids": [int(pid) for pid in dataset.patient_ids],
+            "positive_class": 1,
         },
         "folds": [],
         "average_accuracy": None,
+        "aggregate": {},
     }
     print("Starting patient-wise k-fold evaluation")
     for fold, train_subset, val_subset in dataset.k_fold(
@@ -151,7 +192,23 @@ def evaluate_dataset(dataset: Any, n_splits: int = 5, random_state: int = 42) ->
             min_threshold=min_thr,
             max_threshold=max_thr,
         )
-        accuracy, precision, recall, f1 = classifier.evaluate(val_features, val_labels)
+        predictions = classifier.predict_batch(val_features)
+        accuracy = (
+            sum(1 for p, l in zip(predictions, val_labels) if int(p) == int(l))
+            / len(val_labels)
+            if val_labels
+            else 0.0
+        )
+        confusion, metrics = _confusion_and_metrics(
+            y_true=val_labels, y_pred=predictions, positive_class=1
+        )
+        confusion_total["tp"] += confusion["tp"]
+        confusion_total["fp"] += confusion["fp"]
+        confusion_total["tn"] += confusion["tn"]
+        confusion_total["fn"] += confusion["fn"]
+        precision = float(metrics["precision"])
+        recall = float(metrics["recall"])
+        f1 = float(metrics["f1"])
 
         threshold_parts = [
             f"std_thr={std_thr:.1f}",
@@ -175,6 +232,8 @@ def evaluate_dataset(dataset: Any, n_splits: int = 5, random_state: int = 42) ->
             "precision": precision,
             "recall": recall,
             "f1": f1,
+            "confusion": confusion,
+            "metrics": metrics,
         })
 
     # Calculate average accuracy
@@ -200,6 +259,28 @@ def evaluate_dataset(dataset: Any, n_splits: int = 5, random_state: int = 42) ->
         print(f"K-fold average recall: {avg_recall:.4f}")
         print(f"K-fold average F1: {avg_f1:.4f}")
 
+    tp = confusion_total["tp"]
+    fp = confusion_total["fp"]
+    tn = confusion_total["tn"]
+    fn = confusion_total["fn"]
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    specificity = tn / (tn + fp) if (tn + fp) else 0.0
+    f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
+    balanced_accuracy = 0.5 * (recall + specificity)
+    results["aggregate"] = {
+        "confusion": {"tp": int(tp), "fp": int(fp), "tn": int(tn), "fn": int(fn)},
+        "metrics": {
+            "precision": float(precision),
+            "recall": float(recall),
+            "specificity": float(specificity),
+            "f1": float(f1),
+            "balanced_accuracy": float(balanced_accuracy),
+            "support_pos": int(tp + fn),
+            "support_neg": int(tn + fp),
+        },
+    }
+
     # write benchmarks JSON
     bench_dir = REPO_ROOT / "out" / "benchmarks"
     bench_dir.mkdir(parents=True, exist_ok=True)
@@ -217,15 +298,18 @@ def evaluate_dataset_fallback(
 ) -> None:
     folds = _patient_folds(patient_ids, n_splits=n_splits, random_state=random_state)
     accuracies: List[float] = []
+    confusion_total = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
     results: dict = {
         "meta": {
             "n_splits": int(n_splits),
             "random_state": int(random_state),
             "patient_ids": [int(pid) for pid in patient_ids],
             "torch_available": False,
+            "positive_class": 1,
         },
         "folds": [],
         "average_accuracy": None,
+        "aggregate": {},
     }
 
     print("Starting patient-wise k-fold evaluation (torch-free fallback)")
@@ -241,7 +325,23 @@ def evaluate_dataset_fallback(
             min_threshold=min_thr,
             max_threshold=max_thr,
         )
-        accuracy, precision, recall, f1 = classifier.evaluate(val_features, val_labels)
+        predictions = classifier.predict_batch(val_features)
+        accuracy = (
+            sum(1 for p, l in zip(predictions, val_labels) if int(p) == int(l))
+            / len(val_labels)
+            if val_labels
+            else 0.0
+        )
+        confusion, metrics = _confusion_and_metrics(
+            y_true=val_labels, y_pred=predictions, positive_class=1
+        )
+        confusion_total["tp"] += confusion["tp"]
+        confusion_total["fp"] += confusion["fp"]
+        confusion_total["tn"] += confusion["tn"]
+        confusion_total["fn"] += confusion["fn"]
+        precision = float(metrics["precision"])
+        recall = float(metrics["recall"])
+        f1 = float(metrics["f1"])
         accuracies.append(accuracy)
 
         threshold_parts = [f"std_thr={std_thr:.1f}", f"range_thr={range_thr:.1f}"]
@@ -264,6 +364,8 @@ def evaluate_dataset_fallback(
                 "precision": precision,
                 "recall": recall,
                 "f1": f1,
+                "confusion": confusion,
+                "metrics": metrics,
             }
         )
 
@@ -287,6 +389,28 @@ def evaluate_dataset_fallback(
         print(f"K-fold average precision: {avg_precision:.4f}")
         print(f"K-fold average recall: {avg_recall:.4f}")
         print(f"K-fold average F1: {avg_f1:.4f}")
+
+    tp = confusion_total["tp"]
+    fp = confusion_total["fp"]
+    tn = confusion_total["tn"]
+    fn = confusion_total["fn"]
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    specificity = tn / (tn + fp) if (tn + fp) else 0.0
+    f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
+    balanced_accuracy = 0.5 * (recall + specificity)
+    results["aggregate"] = {
+        "confusion": {"tp": int(tp), "fp": int(fp), "tn": int(tn), "fn": int(fn)},
+        "metrics": {
+            "precision": float(precision),
+            "recall": float(recall),
+            "specificity": float(specificity),
+            "f1": float(f1),
+            "balanced_accuracy": float(balanced_accuracy),
+            "support_pos": int(tp + fn),
+            "support_neg": int(tn + fp),
+        },
+    }
 
     bench_dir = REPO_ROOT / "out" / "benchmarks"
     bench_dir.mkdir(parents=True, exist_ok=True)

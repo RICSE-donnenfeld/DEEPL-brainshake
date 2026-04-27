@@ -39,6 +39,7 @@ class EEGDataset(Dataset):
         data_dir: Union[str, Path],
         patient_ids: Optional[Sequence[int]] = None,
         normalize: bool = False,
+        context_windows: int = 1,
     ) -> None:
         self.data_dir = Path(data_dir)
         self.patient_ids = (
@@ -46,7 +47,19 @@ class EEGDataset(Dataset):
         )
         self.normalize = normalize
 
-        self.data, self.labels, self.patient_index = self._load_all_patients()
+        if int(context_windows) < 1:
+            raise ValueError("context_windows must be >= 1")
+        self.context_windows = int(context_windows)
+
+        # Raw arrays are always 1-second windows (N_raw, 21, 128).
+        self.data, raw_labels, raw_patient_index = self._load_all_patients()
+        self._raw_labels = raw_labels
+        self._raw_patient_index = raw_patient_index
+
+        # Map dataset index-space to valid raw start indices.
+        self._start_indices = self._build_start_indices()
+        self.labels = self._raw_labels[self._start_indices + (self.context_windows - 1)]
+        self.patient_index = self._raw_patient_index[self._start_indices]
 
     def _load_all_patients(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         all_data = []
@@ -102,28 +115,82 @@ class EEGDataset(Dataset):
         return data, labels, patient_index
 
     def __len__(self) -> int:
-        return len(self.labels)
+        return int(self.labels.shape[0])
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        window = self.data[index]
-        if self.normalize:
-            mean = float(window.mean())
-            std = float(window.std())
-            if std > 0:
-                window = (window - mean) / std
-            else:
-                window = window - mean
+        start = int(self._start_indices[index])
+
+        if self.context_windows == 1:
+            window = self.data[start]
+            if self.normalize:
+                mean = float(window.mean())
+                std = float(window.std())
+                window = (window - mean) / std if std > 0 else (window - mean)
+        else:
+            segment = self.data[start : start + self.context_windows]
+            if self.normalize:
+                # Keep the original behaviour (per-window z-score), but applied
+                # independently for each 1-second window before stacking.
+                segment = segment.copy()
+                for i in range(self.context_windows):
+                    w = segment[i]
+                    mean = float(w.mean())
+                    std = float(w.std())
+                    segment[i] = (w - mean) / std if std > 0 else (w - mean)
+            # Stack along time: (K, 21, 128) -> (21, K*128)
+            window = np.transpose(segment, (1, 0, 2)).reshape(
+                segment.shape[1], segment.shape[0] * segment.shape[2]
+            )
+
         x = torch.from_numpy(window).to(dtype=torch.float32)
-        y = torch.tensor(self.labels[index], dtype=torch.long)
+        y = torch.tensor(int(self.labels[index]), dtype=torch.long)
         return x, y
+
+    def _build_start_indices(self) -> np.ndarray:
+        """Return raw start indices for each sample in dataset index-space.
+
+        For context_windows == 1, this is a direct 0..N-1 mapping.
+        For context_windows > 1, we only keep starts that do not cross
+        patient boundaries.
+        """
+
+        n_raw = int(self._raw_labels.shape[0])
+        if self.context_windows == 1:
+            return np.arange(n_raw, dtype=np.int64)
+
+        starts: list[int] = []
+        patients = self._raw_patient_index
+        k = self.context_windows
+
+        seg_start = 0
+        while seg_start < n_raw:
+            patient = patients[seg_start]
+            seg_end = seg_start + 1
+            while seg_end < n_raw and patients[seg_end] == patient:
+                seg_end += 1
+
+            seg_len = seg_end - seg_start
+            if seg_len >= k:
+                starts.extend(range(seg_start, seg_end - k + 1))
+
+            seg_start = seg_end
+
+        if not starts:
+            raise RuntimeError(
+                "No valid context windows could be constructed; "
+                "check patient files or reduce context_windows."
+            )
+
+        return np.asarray(starts, dtype=np.int64)
 
     def summary(self) -> None:
         unique, counts = np.unique(self.labels, return_counts=True)
         class_distribution = dict(zip(unique.tolist(), counts.tolist()))
 
         logger.info("Dataset summary")
-        logger.info(f"  data shape: {self.data.shape}")
-        logger.info(f"  labels shape: {self.labels.shape}")
+        logger.info(f"  raw data shape: {self.data.shape}")
+        logger.info(f"  sample labels shape: {self.labels.shape}")
+        logger.info(f"  context windows: {self.context_windows}")
         logger.info(f"  class distribution: {class_distribution}")
         logger.info(f"  patients loaded: {sorted(set(self.patient_index.tolist()))}")
 

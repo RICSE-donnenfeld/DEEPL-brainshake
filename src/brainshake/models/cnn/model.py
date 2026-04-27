@@ -121,6 +121,84 @@ def _evaluate(
     return avg_loss, accuracy, precision, recall, f1
 
 
+def _evaluate_with_stats(
+    model: SimpleEEGCNN,
+    loader: DataLoader,
+    criterion: nn.CrossEntropyLoss,
+    device: torch.device,
+    positive_class: int = 1,
+) -> tuple[float, float, dict]:
+    """Evaluate and return loss/accuracy plus confusion-matrix stats.
+
+    The stats assume binary classification with `positive_class` (default=1).
+    """
+
+    model.eval()
+    total_loss = 0.0
+    tp = fp = tn = fn = 0
+    total = 0
+
+    pos = int(positive_class)
+    with torch.no_grad():
+        for x_batch, y_batch in loader:
+            x_batch = x_batch.to(device, non_blocking=True)
+            y_batch = y_batch.to(device, non_blocking=True)
+
+            outputs = model(x_batch)
+            loss = criterion(outputs, y_batch)
+            total_loss += loss.item() * x_batch.size(0)
+
+            preds = torch.argmax(outputs, dim=1)
+            total += x_batch.size(0)
+
+            y_pos = y_batch == pos
+            p_pos = preds == pos
+            tp += (p_pos & y_pos).sum().item()
+            fp += (p_pos & ~y_pos).sum().item()
+            tn += (~p_pos & ~y_pos).sum().item()
+            fn += (~p_pos & y_pos).sum().item()
+
+    model.train()
+    if total == 0:
+        return 0.0, 0.0, {
+            "positive_class": pos,
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0,
+            "precision": 0.0,
+            "recall": 0.0,
+            "specificity": 0.0,
+            "f1": 0.0,
+            "balanced_accuracy": 0.0,
+            "support_pos": 0,
+            "support_neg": 0,
+        }
+
+    accuracy = (tp + tn) / total
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    specificity = tn / (tn + fp) if (tn + fp) else 0.0
+    f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
+    balanced_accuracy = 0.5 * (recall + specificity)
+
+    stats = {
+        "positive_class": pos,
+        "tp": int(tp),
+        "fp": int(fp),
+        "tn": int(tn),
+        "fn": int(fn),
+        "precision": float(precision),
+        "recall": float(recall),
+        "specificity": float(specificity),
+        "f1": float(f1),
+        "balanced_accuracy": float(balanced_accuracy),
+        "support_pos": int(tp + fn),
+        "support_neg": int(tn + fp),
+    }
+    return total_loss / total, float(accuracy), stats
+
+
 def _save_checkpoint(
     model: SimpleEEGCNN,
     optimizer: torch.optim.Optimizer,
@@ -158,6 +236,10 @@ class SimpleEEGCNN(nn.Module):
             nn.BatchNorm1d(128),
             nn.ReLU(),
             nn.MaxPool1d(kernel_size=2),
+            # Support stacked temporal context (e.g. 5x128 samples) by forcing
+            # a fixed feature length. For the original 1-second windows this is
+            # effectively a no-op because the pooled length is already 16.
+            nn.AdaptiveAvgPool1d(16),
         )
 
         self.classifier = nn.Sequential(
@@ -181,6 +263,7 @@ def train(
     model_path: Optional[Path] = None,
     resume: bool = False,
     seed: int | None = None,
+    context_windows: int = 1,
 ) -> None:
     if seed is not None:
         seed_everything(int(seed))
@@ -189,11 +272,20 @@ def train(
     logger.info(f"Using data directory: {DEFAULT_DATA_DIR}")
 
     if train_dataset is None:
-        dataset = EEGDataset(data_dir=DEFAULT_DATA_DIR, normalize=True)
+        dataset = EEGDataset(
+            data_dir=DEFAULT_DATA_DIR,
+            normalize=True,
+            context_windows=int(context_windows),
+        )
     else:
         dataset = train_dataset
-    cpu_count = os.cpu_count() or 1
-    num_workers = min(8, cpu_count)
+
+    # Respect Slurm CPU allocation to avoid oversubscribing DataLoader workers.
+    slurm_cpus = os.environ.get("SLURM_CPUS_PER_TASK")
+    cpu_budget = int(slurm_cpus) if slurm_cpus and slurm_cpus.isdigit() else (os.cpu_count() or 1)
+    # Use at most 4 workers (PyTorch often warns beyond that on shared systems).
+    num_workers = 0 if cpu_budget <= 1 else min(4, cpu_budget - 1)
+
     loader = _make_loader(dataset, shuffle=True, num_workers=num_workers, seed=seed)
     val_loader = (
         _make_loader(val_dataset, shuffle=False, num_workers=num_workers, seed=seed)
@@ -301,6 +393,12 @@ def main():
         action="store_true",
         help="Resume training from checkpoint at --model-path if it exists",
     )
+    parser.add_argument(
+        "--context-windows",
+        type=int,
+        default=1,
+        help="Number of consecutive 1-second windows to stack as context (default: 1).",
+    )
     args = vars(parser.parse_args())
 
     log_level = (
@@ -318,11 +416,16 @@ def main():
     if args["command"] == "train":
         kfolds = args["kfolds"]
         seed = args.get("seed", None)
+        context_windows = int(args.get("context_windows", 1))
         model_path_arg = args.get("model_path")
         base_model_path = Path(model_path_arg) if model_path_arg else None
         DEFAULT_MODEL_DIR.mkdir(parents=True, exist_ok=True)
         if kfolds > 1:
-            dataset = EEGDataset(data_dir=DEFAULT_DATA_DIR, normalize=True)
+            dataset = EEGDataset(
+                data_dir=DEFAULT_DATA_DIR,
+                normalize=True,
+                context_windows=context_windows,
+            )
             for fold, train_ds, val_ds in dataset.k_fold(
                 n_splits=kfolds, shuffle=True, random_state=seed
             ):
@@ -348,6 +451,7 @@ def main():
                 model_path=target_path,
                 resume=args["resume"],
                 seed=seed,
+                context_windows=context_windows,
             )
     else:
         logger.error(f"Unrecognized command {args['command']}")

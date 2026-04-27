@@ -36,6 +36,44 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_MODEL_DIR = REPO_ROOT / "out" / "models" / "randomforest"
 
 
+def _confusion_and_metrics(
+    y_true: Sequence[int],
+    y_pred: Sequence[int],
+    positive_class: int = 1,
+) -> tuple[dict, dict]:
+    pos = int(positive_class)
+    tp = fp = tn = fn = 0
+    for yt, yp in zip(y_true, y_pred):
+        yt_pos = int(yt) == pos
+        yp_pos = int(yp) == pos
+        if yp_pos and yt_pos:
+            tp += 1
+        elif yp_pos and not yt_pos:
+            fp += 1
+        elif (not yp_pos) and (not yt_pos):
+            tn += 1
+        else:
+            fn += 1
+
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    specificity = tn / (tn + fp) if (tn + fp) else 0.0
+    f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
+    balanced_accuracy = 0.5 * (recall + specificity)
+
+    confusion = {"tp": int(tp), "fp": int(fp), "tn": int(tn), "fn": int(fn)}
+    metrics = {
+        "precision": float(precision),
+        "recall": float(recall),
+        "specificity": float(specificity),
+        "f1": float(f1),
+        "balanced_accuracy": float(balanced_accuracy),
+        "support_pos": int(tp + fn),
+        "support_neg": int(tn + fp),
+    }
+    return confusion, metrics
+
+
 def extract_features_from_subset(subset: Any) -> Tuple[List[FeatureDict], List[int]]:
     features: List[FeatureDict] = []
     labels: List[int] = []
@@ -108,6 +146,7 @@ def evaluate_dataset(
             else list(range(1, 25))
         )
     accuracies: List[float] = []
+    confusion_total = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
     results: dict = {
         "meta": {
             "n_splits": int(n_splits),
@@ -116,9 +155,11 @@ def evaluate_dataset(
             "n_estimators": int(n_estimators),
             "max_depth": int(max_depth) if max_depth is not None else None,
             "torch_available": bool(TORCH_AVAILABLE),
+            "positive_class": 1,
         },
         "folds": [],
         "average_accuracy": None,
+        "aggregate": {},
     }
     model_dir.mkdir(parents=True, exist_ok=True)
 
@@ -139,11 +180,18 @@ def evaluate_dataset(
             classifier.fit(train_features, train_labels)
             predictions = classifier.predict(val_features)
             accuracy = float(accuracy_score(val_labels, predictions)) if val_labels else 0.0
-            precision = float(
-                precision_score(val_labels, predictions, zero_division=0)
+
+            confusion, metrics = _confusion_and_metrics(
+                y_true=val_labels, y_pred=predictions, positive_class=1
             )
-            recall = float(recall_score(val_labels, predictions, zero_division=0))
-            f1 = float(f1_score(val_labels, predictions, zero_division=0))
+            confusion_total["tp"] += confusion["tp"]
+            confusion_total["fp"] += confusion["fp"]
+            confusion_total["tn"] += confusion["tn"]
+            confusion_total["fn"] += confusion["fn"]
+
+            precision = float(metrics["precision"])
+            recall = float(metrics["recall"])
+            f1 = float(metrics["f1"])
             accuracies.append(accuracy)
 
             model_path = model_dir / f"model_fold_{fold:02d}.joblib"
@@ -164,6 +212,8 @@ def evaluate_dataset(
                     "precision": precision,
                     "recall": recall,
                     "f1": f1,
+                    "confusion": confusion,
+                    "metrics": metrics,
                     "saved_model": str(display_path),
                 }
             )
@@ -190,13 +240,19 @@ def evaluate_dataset(
             )
             classifier.fit(train_features, train_labels)
             predictions = classifier.predict(val_features)
-
             accuracy = float(accuracy_score(val_labels, predictions)) if val_labels else 0.0
-            precision = float(
-                precision_score(val_labels, predictions, zero_division=0)
+
+            confusion, metrics = _confusion_and_metrics(
+                y_true=val_labels, y_pred=predictions, positive_class=1
             )
-            recall = float(recall_score(val_labels, predictions, zero_division=0))
-            f1 = float(f1_score(val_labels, predictions, zero_division=0))
+            confusion_total["tp"] += confusion["tp"]
+            confusion_total["fp"] += confusion["fp"]
+            confusion_total["tn"] += confusion["tn"]
+            confusion_total["fn"] += confusion["fn"]
+
+            precision = float(metrics["precision"])
+            recall = float(metrics["recall"])
+            f1 = float(metrics["f1"])
             accuracies.append(accuracy)
 
             model_path = model_dir / f"model_fold_{fold:02d}.joblib"
@@ -218,6 +274,8 @@ def evaluate_dataset(
                     "precision": precision,
                     "recall": recall,
                     "f1": f1,
+                    "confusion": confusion,
+                    "metrics": metrics,
                     "saved_model": str(display_path),
                 }
             )
@@ -244,6 +302,28 @@ def evaluate_dataset(
         print(f"K-fold average precision: {avg_precision:.4f}")
         print(f"K-fold average recall: {avg_recall:.4f}")
         print(f"K-fold average F1: {avg_f1:.4f}")
+
+    tp = confusion_total["tp"]
+    fp = confusion_total["fp"]
+    tn = confusion_total["tn"]
+    fn = confusion_total["fn"]
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    specificity = tn / (tn + fp) if (tn + fp) else 0.0
+    f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
+    balanced_accuracy = 0.5 * (recall + specificity)
+    results["aggregate"] = {
+        "confusion": {"tp": int(tp), "fp": int(fp), "tn": int(tn), "fn": int(fn)},
+        "metrics": {
+            "precision": float(precision),
+            "recall": float(recall),
+            "specificity": float(specificity),
+            "f1": float(f1),
+            "balanced_accuracy": float(balanced_accuracy),
+            "support_pos": int(tp + fn),
+            "support_neg": int(tn + fp),
+        },
+    }
 
     # write benchmarks JSON
     bench_dir = REPO_ROOT / "out" / "benchmarks"

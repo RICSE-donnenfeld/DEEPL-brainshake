@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
-from .model import SimpleEEGCNN, _make_loader, _evaluate, train
+from .model import SimpleEEGCNN, _make_loader, _evaluate_with_stats, train
 from ...data_handling.load_data import EEGDataset
 
 # project root for output paths
@@ -62,6 +62,7 @@ def evaluate_dataset(
     random_state: int = 42,
 ) -> None:
     accuracies: list[float] = []
+    confusion_total = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
     results: dict = {
         "meta": {
             "n_splits": int(n_splits),
@@ -69,9 +70,12 @@ def evaluate_dataset(
             "epochs": int(epochs),
             "patient_ids": [int(pid) for pid in dataset.patient_ids],
             "normalize": True,
+            "context_windows": int(getattr(dataset, "context_windows", 1)),
+            "positive_class": 1,
         },
         "folds": [],
         "average_accuracy": None,
+        "aggregate": {},
     }
     model_dir.mkdir(parents=True, exist_ok=True)
 
@@ -100,10 +104,18 @@ def evaluate_dataset(
 
         loader = _make_loader(val_subset, shuffle=False, num_workers=1, seed=random_state)
         criterion = nn.CrossEntropyLoss()
-        loss, accuracy, precision, recall, f1 = _evaluate(
-            model, loader, criterion, device
+        loss, accuracy, stats = _evaluate_with_stats(
+            model, loader, criterion, device, positive_class=1
         )
+        precision = float(stats["precision"])
+        recall = float(stats["recall"])
+        f1 = float(stats["f1"])
         accuracies.append(accuracy)
+
+        confusion_total["tp"] += int(stats["tp"])
+        confusion_total["fp"] += int(stats["fp"])
+        confusion_total["tn"] += int(stats["tn"])
+        confusion_total["fn"] += int(stats["fn"])
 
         try:
             display_path = model_path.relative_to(REPO_ROOT)
@@ -123,9 +135,47 @@ def evaluate_dataset(
                 "precision": float(precision),
                 "recall": float(recall),
                 "f1": float(f1),
+                "confusion": {
+                    "tp": int(stats["tp"]),
+                    "fp": int(stats["fp"]),
+                    "tn": int(stats["tn"]),
+                    "fn": int(stats["fn"]),
+                },
+                "metrics": {
+                    "precision": float(stats["precision"]),
+                    "recall": float(stats["recall"]),
+                    "specificity": float(stats["specificity"]),
+                    "f1": float(stats["f1"]),
+                    "balanced_accuracy": float(stats["balanced_accuracy"]),
+                    "support_pos": int(stats["support_pos"]),
+                    "support_neg": int(stats["support_neg"]),
+                },
                 "saved_model": str(display_path),
             }
         )
+
+    # Aggregate confusion and derived metrics over all validation windows.
+    tp = confusion_total["tp"]
+    fp = confusion_total["fp"]
+    tn = confusion_total["tn"]
+    fn = confusion_total["fn"]
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    specificity = tn / (tn + fp) if (tn + fp) else 0.0
+    f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
+    balanced_accuracy = 0.5 * (recall + specificity)
+    results["aggregate"] = {
+        "confusion": {"tp": int(tp), "fp": int(fp), "tn": int(tn), "fn": int(fn)},
+        "metrics": {
+            "precision": float(precision),
+            "recall": float(recall),
+            "specificity": float(specificity),
+            "f1": float(f1),
+            "balanced_accuracy": float(balanced_accuracy),
+            "support_pos": int(tp + fn),
+            "support_neg": int(tn + fp),
+        },
+    }
 
     _persist_results(results, accuracies)
 
@@ -137,6 +187,7 @@ def evaluate_saved_models(
     random_state: int = 42,
 ) -> None:
     accuracies: list[float] = []
+    confusion_total = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
     results: dict = {
         "meta": {
             "n_splits": int(n_splits),
@@ -144,9 +195,12 @@ def evaluate_saved_models(
             "patient_ids": [int(pid) for pid in dataset.patient_ids],
             "normalize": True,
             "use_saved_models": True,
+            "context_windows": int(getattr(dataset, "context_windows", 1)),
+            "positive_class": 1,
         },
         "folds": [],
         "average_accuracy": None,
+        "aggregate": {},
     }
     model_dir.mkdir(parents=True, exist_ok=True)
 
@@ -170,10 +224,18 @@ def evaluate_saved_models(
 
         loader = _make_loader(val_subset, shuffle=False, num_workers=1, seed=random_state)
         criterion = nn.CrossEntropyLoss()
-        loss, accuracy, precision, recall, f1 = _evaluate(
-            model, loader, criterion, device
+        loss, accuracy, stats = _evaluate_with_stats(
+            model, loader, criterion, device, positive_class=1
         )
+        precision = float(stats["precision"])
+        recall = float(stats["recall"])
+        f1 = float(stats["f1"])
         accuracies.append(accuracy)
+
+        confusion_total["tp"] += int(stats["tp"])
+        confusion_total["fp"] += int(stats["fp"])
+        confusion_total["tn"] += int(stats["tn"])
+        confusion_total["fn"] += int(stats["fn"])
 
         try:
             display_path = model_path.relative_to(REPO_ROOT)
@@ -193,9 +255,46 @@ def evaluate_saved_models(
                 "precision": float(precision),
                 "recall": float(recall),
                 "f1": float(f1),
+                "confusion": {
+                    "tp": int(stats["tp"]),
+                    "fp": int(stats["fp"]),
+                    "tn": int(stats["tn"]),
+                    "fn": int(stats["fn"]),
+                },
+                "metrics": {
+                    "precision": float(stats["precision"]),
+                    "recall": float(stats["recall"]),
+                    "specificity": float(stats["specificity"]),
+                    "f1": float(stats["f1"]),
+                    "balanced_accuracy": float(stats["balanced_accuracy"]),
+                    "support_pos": int(stats["support_pos"]),
+                    "support_neg": int(stats["support_neg"]),
+                },
                 "loaded_model": str(display_path),
             }
         )
+
+    tp = confusion_total["tp"]
+    fp = confusion_total["fp"]
+    tn = confusion_total["tn"]
+    fn = confusion_total["fn"]
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    specificity = tn / (tn + fp) if (tn + fp) else 0.0
+    f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
+    balanced_accuracy = 0.5 * (recall + specificity)
+    results["aggregate"] = {
+        "confusion": {"tp": int(tp), "fp": int(fp), "tn": int(tn), "fn": int(fn)},
+        "metrics": {
+            "precision": float(precision),
+            "recall": float(recall),
+            "specificity": float(specificity),
+            "f1": float(f1),
+            "balanced_accuracy": float(balanced_accuracy),
+            "support_pos": int(tp + fn),
+            "support_neg": int(tn + fp),
+        },
+    }
 
     _persist_results(results, accuracies)
 
@@ -241,6 +340,12 @@ def parse_args() -> argparse.Namespace:
         help="Explicit patient IDs to load",
     )
     parser.add_argument(
+        "--context-windows",
+        type=int,
+        default=1,
+        help="Number of consecutive 1-second windows to stack as context (default: 1).",
+    )
+    parser.add_argument(
         "--smoke-test",
         action="store_true",
         help="Smoke-test: load first 2 patients and use two folds",
@@ -265,6 +370,7 @@ def main() -> None:
         data_dir=args.data_dir,
         patient_ids=patient_ids,
         normalize=True,
+        context_windows=args.context_windows,
     )
     if args.use_saved_models:
         evaluate_saved_models(
