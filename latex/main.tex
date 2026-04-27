@@ -70,7 +70,7 @@ in Electro-Encephalogram Signals}\\[4pt]
 \begin{abstract}
 \noindent
 This report investigates the automated detection of epileptic seizures in EEG signals using four approaches:
-a basic threshold-based algorithm operating on raw signal statistics, a random forest trained on eight handcrafted time-domain features, a one-dimensional convolutional neural network (CNN) trained on raw signal windows, and a recurrent LSTM that processes windows as temporal episodes.
+a basic threshold-based algorithm operating on raw signal statistics, a random forest trained on eight handcrafted time-domain features, a one-dimensional convolutional neural network (CNN) trained on raw signal windows, and a recurrent LSTM (adapted from the course-provided EpilepsyLSTM, Chakrabarti et al.) that processes windows as temporal episodes.
 EEG recordings from 24 patients are segmented into 1\,s windows, totalling \num{571905} samples (\num{86672} seizure windows, 15.2\%) and evaluated under patient-level and seizure-level cross-validation.
 Under 5-fold patient-level CV, the CNN achieves 86.3\% average accuracy; under seizure-level CV, the LSTM (std pooling) achieves 97.2\% accuracy and 0.985 F1, dramatically outperforming all per-window baselines.
 \end{abstract}
@@ -184,7 +184,9 @@ We implement a one-dimensional CNN consisting of three convolutional–ReLU–ma
 The model is trained with Adam (learning rate $10^{-3}$) for 2 epochs and class-weighted cross-entropy to emphasize seizure windows.
 
 \subsection{Approach 4: LSTM Classifier}
-We implement a two-layer LSTM that processes variable-length episodes of EEG windows.
+We adapt the course-provided \texttt{EpilepsyLSTM} model (Chakrabarti et al., channel-fusion architecture) with several modifications.
+The original model uses only the last LSTM hidden state for episode-level classification; we instead classify \emph{every timestep}, producing per-window seizure/non-seizure predictions.
+We add optional Conv1d projection (\texttt{conv\_proj}) to learn waveform features before the LSTM, packed-sequence handling for variable-length episodes, per-window pooling (std/mean/mean\_std) to reduce each [21, 128] window to a feature vector, class-weighted cross-entropy with padding masking (\texttt{ignore\_index=-1}), and simplify the classifier head to a single linear layer.
 Each 1\,s window is reduced to a 21-dimensional feature vector by taking the per-channel standard deviation (\texttt{pool="std"}), which preserves amplitude information that averaging would collapse to near-zero for oscillating EEG signals.
 Alternative pooling options (\texttt{mean} (21-d), \texttt{mean\_std} (42-d), \texttt{none} ($21\times128$)) are evaluated in the experiments.
 Contiguous seizure windows from the same patient are grouped into episodes; non-seizure windows are segmented into fixed-length chunks of 10 windows.

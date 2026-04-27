@@ -153,12 +153,14 @@ Epileptic seizures = abnormal brain electrical activity detectable via EEG.
 
 # Pipeline 4: LSTM
 
+*Adapted from course-provided EpilepsyLSTM (ChakrabartiChannelFusion)*
+
 <img src="../out/mermaid/lstm.svg" width="90%">
 
-- Groups contiguous same-label windows into **episodes**
-- Per-window **pooling** reduces [21, 128] → feature vector
-- 2-layer LSTM (hidden=128) + per-timestep classifier
-- Seizure-level k-fold with context=20
+- **Per-timestep classification** (original: last hidden state only)
+- **Conv1d projection** option + packed sequences for variable-length episodes
+- Per-window **pooling** (std/mean/mean_std) reduces [21, 128] → feature vector
+- Simplified classifier head, class-weighted CE with padding masking
 
 ---
 
