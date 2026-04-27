@@ -38,64 +38,89 @@ style: |
 
 # Abstract
 
-A one-dimensional CNN outperforms threshold and random forest baselines for EEG seizure detection under patient-level cross-validation.
+Four models compared under patient-level and seizure-level CV: **threshold**, **random forest**, **CNN**, and **LSTM**.
+The CNN leads in per-window accuracy; the LSTM exploits temporal context within seizure episodes.
 
 ---
 
 # Contents
 
 - Introduction
-- Dataset Description & Analysis
-- Methodology
-- Implementation Details
-- Experimental Design
+- Dataset & Analysis
+- Methodology (4 pipelines)
+- Cross-validation strategies
 - Results
-- Discussion / Conclusion
+- Conclusion & future work
 
 ---
 
 # Introduction
 
-Automated seizure detection aids clinical diagnosis. We compare a **threshold algorithm**, **random forest**, and **CNN** to assess model expressivity.
+Automated seizure detection aids clinical diagnosis. We compare a **threshold algorithm**, **random forest**, **CNN**, and **LSTM** — progressively richer models and split strategies.
 
 ---
 
 <img src="../out/data_analyze/simple_comparison.png" width="45%"> <img src="../out/data_analyze/metric_trends.png" width="45%">
 
-# Dataset Description
+# Dataset
 
-- **Source**: CHB-MIT (24 patients)
-- **Windows**: 1s segments (~571k samples)
-- **Visuals**:
-  - Std/Range (Top Left)
-  - Metric Trends (Bottom Left)
-
----
-
-# Methodology: Pipeline
-
-- **Threshold**: Raw signal statistics.
-- **Random Forest**: Handcrafted time-domain features.
-- **CNN**: 3x `Conv1d` → `BN` → `ReLU` → `Pool`.
+- **Source**: CHB-MIT (24 patients, pediatric)
+- **Windows**: 1 s segments → ~571k samples, 3.4k seizures
+- **Top-left**: Std & range by patient
+- **Top-right**: Avg metrics across folds
 
 ---
 
-# Methodology: Diagrams
+# Methodology: 4 Pipelines
+
+| Model | Input | CV level |
+|---|---|---|
+| Threshold | Raw signal stats | patient |
+| Random Forest | Mean/std/range features | patient |
+| CNN | Raw windows [21×128] | patient |
+| **LSTM** | Mean-pooled episodes [seq, 21] | **seizure** |
+
+---
+
+# Cross-Validation Strategies
+
+- **Patient-level**: whole patient → one fold (no leakage)
+- **Window-level**: each window independently, ±4 seizure neighbors dropped from val
+- **Seizure-level**: contiguous seizure episode → one fold; non-seizure always in train
+
+---
+
+# LSTM Pipeline Detail
+
+1. `EEGDataset.k_fold(level="seizure")` splits seizure episodes as atomic units
+2. `SeizureEpisodeDataset` groups windows into temporal sequences
+   - Seizure episodes stay intact (variable length)
+   - Non-seizure windows → chunks of 10
+3. `pad_collate` pads variable-length batches, produces `lengths` tensor
+4. `SeizureLSTM(input=21, hidden=128, layers=2)` → per-window logits `[batch, seq, 2]`
+5. `episode_loss` masks padding (`ignore_index=-1`) + class weights
+
+---
 
 <img src="../out/plots/threshold.png" width="30%"> <img src="../out/plots/randomforest.png" width="30%"> <img src="../out/plots/cnn.png" width="30%">
 
+# Pipeline Diagrams
+
+Threshold → Random Forest → CNN (LSTM not shown but follows episode grouping)
+
 ---
 
-# Experimental Design
+# Hyperparameters
 
-| Parameter       | Random Forest | CNN           |
-| --------------- | ------------- | ------------- |
-| Trees / filters | 100           | [32, 64, 128] |
-| Kernel sizes    | -             | [5, 5, 3]     |
-| Learning rate   | -             | $10^{-3}$     |
-| Batch size      | -             | 64            |
-| Epochs          | -             | 50            |
-| Dropout         | -             | 0.3           |
+| Parameter | RF | CNN | LSTM |
+|---|---|---|---|
+| Trees/filters/layers | 100 | [32,64,128] | 2 LSTM |
+| Hidden size | — | — | 128 |
+| Learning rate | — | 1e-3 | 1e-3 |
+| Batch size | — | 64 | 32 |
+| Epochs | — | 50 | 20 |
+| Dropout | — | 0.3 | 0.3 |
+| CV level | patient | patient | seizure |
 
 ---
 
@@ -103,16 +128,17 @@ Automated seizure detection aids clinical diagnosis. We compare a **threshold al
 
 # Results
 
-- **CNN** outperforms baselines.
-- **Stability**: Performance >80% across all patient folds.
-- **Capture**: Captures temporal patterns missed by RF.
+- **CNN** outperforms threshold and RF baselines (>80% across folds)
+- **LSTM** exploits temporal context within seizure episodes
+- Seizure-level CV preserves episode integrity; direct comparison pending matching splits
 
 ---
 
 # Conclusion
 
-- End-to-end CNN is the superior architecture for patient-level CV.
-- Future work: Multichannel spatial context.
+- CNN is the top per-window classifier under patient-level CV
+- LSTM adds a sequential perspective via episode-level processing
+- Future work: compare CNN vs LSTM under matching seizure-level splits, explore multichannel + longer temporal context
 
 ---
 

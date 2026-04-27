@@ -59,6 +59,12 @@ COMMANDS: tuple[CommandDef, ...] = (
         category="model evaluation",
     ),
     CommandDef(
+        name="evaluate-lstm",
+        target="brainshake.models.lstm.evaluate",
+        description="Episode-level LSTM evaluation (seizure/window/patient k-fold).",
+        category="model evaluation",
+    ),
+    CommandDef(
         name="plot-benchmarks",
         target="brainshake.plotting.plots",
         description="Generate benchmark plots from saved metrics.",
@@ -100,6 +106,16 @@ COMPILE_ARGS: Mapping[str, tuple[str, ...]] = {
     "evaluate-threshold": (
         "--n-splits",
         "5",
+        "--random-state",
+        "2026",
+    ),
+    "evaluate-lstm": (
+        "--n-splits",
+        "5",
+        "--epochs",
+        "20",
+        "--level",
+        "seizure",
         "--random-state",
         "2026",
     ),
@@ -176,6 +192,7 @@ def compile_pipeline() -> int:
         "visualize-data",
         "train-cnn",
         "evaluate-cnn",
+        "evaluate-lstm",
         "evaluate-randomforest",
         "evaluate-threshold",
         "plot-benchmarks",

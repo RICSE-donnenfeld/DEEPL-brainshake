@@ -1,56 +1,85 @@
+from __future__ import annotations
+
 import torch
 import torch.nn as nn
-
-from lstmmodels.ModelWeightsInit import init_weights_xavier_normal
 
 
 class SeizureLSTM(nn.Module):
     """
-    LSTM for classifying EEG windows within seizure episodes.
+    LSTM that processes sequences of EEG windows (episodes).
+
+    Input:  [batch, seq_len, input_size]  — one feature vector per window
+    Output: [batch, seq_len, n_classes]   — per-timestep classification logits
+
+    Typical input_size = 21 (one scalar per EEG channel after pooling time).
     """
-    def __init__(self, inputmodule_params, net_params, outmodule_params):
+
+    def __init__(
+        self,
+        input_size: int = 21,
+        hidden_size: int = 128,
+        num_layers: int = 2,
+        n_classes: int = 2,
+        dropout: float = 0.3,
+    ) -> None:
         super().__init__()
-        print("Running class: ", self.__class__.__name__)
-
-        self.inputmodule_params = inputmodule_params
-        self.net_params = net_params
-        self.outmodule_params = outmodule_params
-
-        n_nodes = inputmodule_params["n_nodes"]
-        Lstacks = net_params["Lstacks"]
-        dropout = net_params["dropout"]
-        hidden_size = net_params["hidden_size"]
-
-        n_classes = outmodule_params["n_classes"]
-        hd = outmodule_params["hd"]
-
         self.lstm = nn.LSTM(
-            input_size=n_nodes,
+            input_size=input_size,
             hidden_size=hidden_size,
-            num_layers=Lstacks,
+            num_layers=num_layers,
             batch_first=True,
             bidirectional=False,
-            dropout=dropout,
+            dropout=dropout if num_layers > 1 else 0.0,
         )
+        self.classifier = nn.Linear(hidden_size, n_classes)
 
-        self.fc = nn.Sequential(
-            nn.Linear(hidden_size, hd),
-            nn.ReLU(),
-            nn.Linear(hd, n_classes),
-        )
-
-    def init_weights(self):
-        init_weights_xavier_normal(self)
-
-    def forward(self, x):
+    def forward(
+        self,
+        x: torch.Tensor,
+        lengths: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         """
         Args:
-            x: Tensor [batch, n_nodes, seq_len]
+            x:        [batch, seq_len, input_size]
+            lengths:  [batch]  optional, for packed-sequence processing
         Returns:
-            logits: Tensor [batch, n_classes]
+            logits:   [batch, seq_len, n_classes]
         """
-        x = x.permute(0, 2, 1)  # [batch, seq_len, n_nodes]
-        out, (hn, cn) = self.lstm(x)
-        out = out[:, -1, :]  # final time-step output
-        logits = self.fc(out)
-        return logits
+        if lengths is not None:
+            packed = nn.utils.rnn.pack_padded_sequence(
+                x, lengths.cpu(), batch_first=True, enforce_sorted=False
+            )
+            packed_out, _ = self.lstm(packed)
+            out, _ = nn.utils.rnn.pad_packed_sequence(packed_out, batch_first=True)
+        else:
+            out, _ = self.lstm(x)
+        return self.classifier(out)
+
+
+def episode_loss(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    lengths: torch.Tensor,
+    criterion: nn.Module,
+) -> torch.Tensor:
+    """
+    Compute loss masking out padding positions.
+
+    Args:
+        logits:   [batch, seq_len, n_classes]
+        targets:  [batch, seq_len]
+        lengths:  [batch]
+        criterion: nn.CrossEntropyLoss (or similar)
+    """
+    batch_size, max_len, n_classes = logits.shape
+    total = torch.tensor(0.0, device=logits.device)
+    n = 0
+    for i in range(batch_size):
+        ell = lengths[i].item()
+        if ell == 0:
+            continue
+        total = total + criterion(logits[i, :ell], targets[i, :ell])
+        n += ell
+    if n == 0:
+        return total
+    return total / n

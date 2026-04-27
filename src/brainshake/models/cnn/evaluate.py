@@ -22,7 +22,7 @@ DEFAULT_MODEL_DIR = REPO_ROOT / "out" / "models" / "cnn"
 DEFAULT_DATA_DIR = REPO_ROOT / "data" / "Epilepsy"
 
 
-def _persist_results(results: dict, accuracies: Sequence[float]) -> None:
+def _persist_results(results: dict, accuracies: Sequence[float], suffix: str = "") -> None:
     # Calculate average accuracy
     avg_acc = np.mean(accuracies) if accuracies else 0.0
     results["average_accuracy"] = float(avg_acc)
@@ -48,7 +48,7 @@ def _persist_results(results: dict, accuracies: Sequence[float]) -> None:
 
     bench_dir = REPO_ROOT / "out" / "benchmarks"
     bench_dir.mkdir(parents=True, exist_ok=True)
-    out_path = bench_dir / "cnn.json"
+    out_path = bench_dir / f"cnn{suffix}.json"
     with open(out_path, "w") as f:
         json.dump(results, f, indent=2)
     print(f"Saved benchmarks to {out_path.relative_to(REPO_ROOT)}")
@@ -60,16 +60,18 @@ def evaluate_dataset(
     n_splits: int = 5,
     epochs: int = 10,
     random_state: int = 42,
+    level: str = "window",
+    suffix: str = "",
 ) -> None:
     accuracies: list[float] = []
     results: dict = {"folds": [], "average_accuracy": None}
     model_dir.mkdir(parents=True, exist_ok=True)
 
-    print("Starting patient-wise k-fold CNN evaluation")
+    print(f"Starting k-fold CNN evaluation (level={level})")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     for fold, train_subset, val_subset in dataset.k_fold(
-        n_splits=n_splits, shuffle=True, random_state=random_state, level="window"
+        n_splits=n_splits, shuffle=True, random_state=random_state, level=level
     ):
         model_path = model_dir / f"cnn_fold_{fold:02d}.pt"
         train(
@@ -111,7 +113,7 @@ def evaluate_dataset(
             }
         )
 
-    _persist_results(results, accuracies)
+    _persist_results(results, accuracies, suffix=suffix)
 
 
 def evaluate_saved_models(
@@ -119,16 +121,18 @@ def evaluate_saved_models(
     model_dir: Path,
     n_splits: int = 5,
     random_state: int = 42,
+    level: str = "window",
+    suffix: str = "",
 ) -> None:
     accuracies: list[float] = []
     results: dict = {"folds": [], "average_accuracy": None}
     model_dir.mkdir(parents=True, exist_ok=True)
 
-    print("Evaluating existing CNN checkpoints")
+    print(f"Evaluating existing CNN checkpoints (level={level})")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     for fold, _, val_subset in dataset.k_fold(
-        n_splits=n_splits, shuffle=True, random_state=random_state, level="window"
+        n_splits=n_splits, shuffle=True, random_state=random_state, level=level
     ):
         model_path = model_dir / f"cnn_fold_{fold:02d}.pt"
         if not model_path.exists():
@@ -164,7 +168,7 @@ def evaluate_saved_models(
             }
         )
 
-    _persist_results(results, accuracies)
+    _persist_results(results, accuracies, suffix=suffix)
 
 
 def parse_args() -> argparse.Namespace:
@@ -217,6 +221,19 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Load the checkpoints previously saved by train-cnn instead of retraining.",
     )
+    parser.add_argument(
+        "--level",
+        type=str,
+        default="window",
+        choices=["patient", "window", "seizure"],
+        help="k_fold split level: patient, window, or seizure",
+    )
+    parser.add_argument(
+        "--suffix",
+        type=str,
+        default="",
+        help="Suffix appended to the benchmark output file (e.g. '_patient' -> cnn_patient.json)",
+    )
     return parser.parse_args()
 
 
@@ -239,6 +256,8 @@ def main() -> None:
             model_dir=args.model_dir,
             n_splits=args.n_splits,
             random_state=args.random_state,
+            level=args.level,
+            suffix=args.suffix,
         )
     else:
         evaluate_dataset(
@@ -247,6 +266,8 @@ def main() -> None:
             n_splits=args.n_splits,
             epochs=args.epochs,
             random_state=args.random_state,
+            level=args.level,
+            suffix=args.suffix,
         )
 
 
