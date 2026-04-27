@@ -172,6 +172,7 @@ The CNN and random forest use patient-level splits; the LSTM uses seizure-level 
 \label{fig:cv_strategies}
 \end{figure}
 
+
 \subsection{Approach 1: Threshold Classifier}
 We implement a threshold-based classifier that flags a window as seizure if its standard deviation or range exceeds fold-specific thresholds; optional min/max thresholds further flag windows with extreme amplitude excursions.
 Thresholds are optimized via grid search on each training fold.
