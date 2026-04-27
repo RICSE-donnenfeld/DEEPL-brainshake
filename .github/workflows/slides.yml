@@ -1,0 +1,41 @@
+name: Render Slides
+
+on:
+  push:
+    paths:
+      - "slides/**"
+      - "out/mermaid/**"
+      - "out/plots/**"
+      - "out/data_analyze/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Render slides to PDF
+        run: npx @marp-team/marp-cli slides/slides.md --pdf --allow-local-files -o slides/slides.pdf
+
+      - name: Upload PDF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: slides-pdf
+          path: slides/slides.pdf
+
+      - name: Commit PDF back to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f slides/slides.pdf
+          git diff --cached --quiet || git commit -m "ci: render slides PDF"
+          git push

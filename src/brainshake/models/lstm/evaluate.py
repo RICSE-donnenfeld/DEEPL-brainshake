@@ -190,6 +190,7 @@ def evaluate_dataset(
     batch_size: int = 32,
     non_seizure_len: int = 10,
     pool: str = "std",
+    context: int = 20,
     random_state: int = 42,
     patient_ids: list[int] | None = None,
     level: str = "seizure",
@@ -198,14 +199,15 @@ def evaluate_dataset(
     dataset = EEGDataset(data_dir=data_dir, patient_ids=patient_ids, normalize=False)
     model_dir.mkdir(parents=True, exist_ok=True)
 
-    input_size = {"std": 21, "mean": 21, "mean_std": 42, "none": 21 * 128}[pool]
+    input_size = {"std": 21, "mean": 21, "mean_std": 42, "none": 21 * 128, "conv_proj": 21}[pool]
+    use_conv_proj = pool == "conv_proj"
 
     results: dict = {"folds": [], "average_accuracy": None}
     accuracies: list[float] = []
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     for fold, train_sub, val_sub in dataset.k_fold(
-        n_splits=n_splits, shuffle=True, random_state=random_state, level=level
+        n_splits=n_splits, shuffle=True, random_state=random_state, level=level, context=context
     ):
         logger.info(f"Fold {fold + 1}/{n_splits} (level={level})")
 
@@ -216,7 +218,7 @@ def evaluate_dataset(
             dataset, list(val_sub.indices), non_seizure_len=non_seizure_len, pool=pool
         )
 
-        model = SeizureLSTM(input_size=input_size, hidden_size=128, num_layers=2, n_classes=2, dropout=0.3)
+        model = SeizureLSTM(input_size=input_size, hidden_size=128, num_layers=2, n_classes=2, dropout=0.3, conv_proj=use_conv_proj)
         model_path = model_dir / f"lstm_fold_{fold:02d}.pt"
 
         train_fold(
@@ -245,8 +247,8 @@ def evaluate_dataset(
 
     bench_dir = REPO_ROOT / "out" / "benchmarks"
     bench_dir.mkdir(parents=True, exist_ok=True)
-    results["level"] = level
     results["pool"] = pool
+    results["context"] = context
     results["non_seizure_len"] = non_seizure_len
 
     out_path = bench_dir / f"lstm{suffix}.json"
@@ -274,8 +276,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--random-state", type=int, default=2026)
     parser.add_argument("--patient-ids", type=int, nargs="+", default=None)
     parser.add_argument("--level", type=str, default="seizure", choices=["patient", "window", "seizure"])
-    parser.add_argument("--pool", type=str, default="std", choices=["mean", "std", "mean_std", "none"],
-                        help="Per-window pooling: std (amplitude), mean (risky for zero-centered EEG), mean_std, none (flatten)")
+    parser.add_argument("--pool", type=str, default="std", choices=["mean", "std", "mean_std", "none", "conv_proj"],
+                        help="Per-window pooling: std (amplitude), mean (risky), mean_std, none (flatten), conv_proj (Conv1d projection)")
+    parser.add_argument("--context", type=int, default=20,
+                        help="Number of non-seizure windows before/after each seizure episode included in val (seizure-level only)")
     parser.add_argument("--suffix", type=str, default="",
                         help="Suffix appended to the benchmark output file (e.g. '_std_seizure' -> lstm_std_seizure.json)")
     return parser.parse_args()
@@ -293,6 +297,7 @@ def main() -> None:
         batch_size=args.batch_size,
         non_seizure_len=args.non_seizure_len,
         pool=args.pool,
+        context=args.context,
         random_state=args.random_state,
         patient_ids=args.patient_ids,
         level=args.level,

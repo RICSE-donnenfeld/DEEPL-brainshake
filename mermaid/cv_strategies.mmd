@@ -1,0 +1,14 @@
+%% Cross-validation strategies
+flowchart LR
+    subgraph patient["Patient-level"]
+        p1["Whole patient → one fold"]
+        p2["No leakage"]
+    end
+    subgraph window["Window-level"]
+        w1["Window round-robin"]
+        w2["±4 seizure neighbors dropped"]
+    end
+    subgraph seizure["Seizure-level"]
+        s1["Whole episode → one fold"]
+        s2["±20 context windows in val"]
+    end

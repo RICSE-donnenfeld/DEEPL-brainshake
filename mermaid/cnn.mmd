@@ -1,20 +1,8 @@
-%% CNN pipeline (SimpleEEGCNN)
-flowchart TB
-    data["CHB-MIT EEG windows"]
-    dataset["EEGDataset (normalize=False) per patient"]
-    preprocess["Window normalization\n(zero mean, unit std) per 1s segment"]
-    loader["DataLoader (batch=32, shuffle, pin_memory)"]
-    cnn["SimpleEEGCNN\n(Conv1d×3 → BatchNorm → ReLU → MaxPool)"]
-    classifier["FC layers → Dropout(0.3) → Softmax"]
-    train["Adam(lr=1e-3) + CrossEntropyLoss\nwith class weights"]
-    checkpoint["Save fold checkpoint → out/models/cnn"]
-    evaluate["Patient-wise k-fold eval\n(loss, accuracy per fold)"]
-
-    data --> dataset
-    dataset --> preprocess
-    preprocess --> loader
-    loader --> cnn
-    cnn --> classifier
-    classifier --> train
-    train --> checkpoint
-    checkpoint --> evaluate
+%% CNN pipeline — horizontal
+flowchart LR
+    data["CHB-MIT EEG [N, 21, 128]"] --> kfold["5-fold<br/>patient CV"]
+    kfold --> loader["DataLoader<br/>batch=32"]
+    loader --> cnn["Conv1d×3 blocks<br/>21→32→64→128<br/>+BN+ReLU+MaxPool"]
+    cnn --> fc["FC: 2048→256<br/>Drop0.3→2"]
+    fc --> train["Adam(lr=1e-3)<br/>CE(class-wtd)<br/>2 epochs"]
+    train --> evaluate["Per-fold metrics"]

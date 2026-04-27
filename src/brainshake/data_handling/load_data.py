@@ -3,6 +3,8 @@ Data Loader :
 Exports a pytorch Dataset class with integrated patient-level k-folding
 """
 
+import json
+import time
 from pathlib import Path
 from typing import Optional, Sequence, Tuple, Union
 
@@ -14,6 +16,13 @@ from torch.utils.data import Dataset, Subset
 import logging
 
 logger = logging.getLogger(__name__)
+
+_CACHE_VERSION = 2
+
+
+def _cache_key(patient_ids: Sequence[int], normalize: bool) -> str:
+    slug = "_".join(str(p) for p in sorted(patient_ids))
+    return f"cache_p{'_'.join(str(p) for p in sorted(patient_ids))}_norm{int(normalize)}"
 
 
 class EEGDataset(Dataset):
@@ -32,6 +41,20 @@ class EEGDataset(Dataset):
 
     Each parquet file must contain:
         class -> shape [N]
+
+    Parameters
+    ----------
+    data_dir : str or Path
+        Root directory containing per-patient .npz and .parquet files.
+    patient_ids : sequence of int, optional
+        Subset of patient IDs (1–24) to load.  ``None`` loads all 24.
+    normalize : bool
+        If True, apply global z-score normalisation after loading.
+    cache : bool
+        If True (default), cache the concatenated arrays on disk as .npy
+        files so that subsequent instantiations skip the slow per-patient
+        I/O.  The cache is invalidated automatically when any source file
+        changes or when patient_ids / normalize differ.
     """
 
     def __init__(
@@ -39,6 +62,7 @@ class EEGDataset(Dataset):
         data_dir: Union[str, Path],
         patient_ids: Optional[Sequence[int]] = None,
         normalize: bool = False,
+        cache: bool = True,
     ) -> None:
         self.data_dir = Path(data_dir)
         self.patient_ids = (
@@ -46,16 +70,111 @@ class EEGDataset(Dataset):
         )
         self.normalize = normalize
 
-        self.data, self.labels, self.patient_index = self._load_all_patients()
+        loaded_from_cache = False
+        if cache:
+            loaded_from_cache = self._try_load_cache()
 
-        if self.normalize:
-            mean = self.data.mean()
-            std = self.data.std()
-            if std == 0:
-                raise ValueError(
-                    "Standard deviation is zero, cannot normalize dataset."
-                )
-            self.data = (self.data - mean) / std
+        if not loaded_from_cache:
+            self.data, self.labels, self.patient_index = self._load_all_patients()
+            if self.normalize:
+                mean = self.data.mean()
+                std = self.data.std()
+                if std == 0:
+                    raise ValueError(
+                        "Standard deviation is zero, cannot normalize dataset."
+                    )
+                self.data = (self.data - mean) / std
+            if cache:
+                self._save_cache()
+
+    def _cache_dir(self) -> Path:
+        d = self.data_dir / ".cache"
+        d.mkdir(exist_ok=True)
+        return d
+
+    def _cache_paths(self):
+        key = _cache_key(self.patient_ids, self.normalize)
+        d = self._cache_dir()
+        return (
+            d / f"{key}_data.npy",
+            d / f"{key}_labels.npy",
+            d / f"{key}_patient_index.npy",
+            d / f"{key}_meta.json",
+        )
+
+    def _source_mtimes(self) -> list[float]:
+        mtimes = []
+        for pid in self.patient_ids:
+            npz_path = self.data_dir / f"chb{pid:02d}_seizure_EEGwindow_1.npz"
+            meta_path = self.data_dir / f"chb{pid:02d}_seizure_metadata_1.parquet"
+            for p in (npz_path, meta_path):
+                if p.exists():
+                    mtimes.append(p.stat().st_mtime)
+        return mtimes
+
+    def _try_load_cache(self) -> bool:
+        data_p, labels_p, pidx_p, meta_p = self._cache_paths()
+        if not all(p.exists() for p in (data_p, labels_p, pidx_p, meta_p)):
+            logger.info("Cache miss: not all files present")
+            return False
+
+        try:
+            with open(meta_p) as f:
+                meta = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            logger.info("Cache miss: invalid meta file")
+            return False
+
+        if meta.get("version") != _CACHE_VERSION:
+            logger.info("Cache miss: version mismatch")
+            return False
+
+        if sorted(meta.get("patient_ids", [])) != sorted(self.patient_ids):
+            logger.info("Cache miss: patient_ids mismatch")
+            return False
+
+        if meta.get("normalize") != self.normalize:
+            logger.info("Cache miss: normalize flag mismatch")
+            return False
+
+        cached_mtimes = meta.get("source_mtimes", [])
+        current_mtimes = self._source_mtimes()
+        if len(cached_mtimes) != len(current_mtimes):
+            logger.info("Cache miss: number of source files changed")
+            return False
+        for c, n in zip(cached_mtimes, current_mtimes):
+            if abs(c - n) > 1.0:
+                logger.info("Cache miss: source file modified")
+                return False
+
+        logger.info("Loading from cache...")
+        t0 = time.time()
+        self.data = np.load(data_p)
+        self.labels = np.load(labels_p)
+        self.patient_index = np.load(pidx_p)
+        elapsed = time.time() - t0
+        logger.info(f"Cache loaded in {elapsed:.1f}s  (data shape={self.data.shape})")
+        return True
+
+    def _save_cache(self) -> None:
+        data_p, labels_p, pidx_p, meta_p = self._cache_paths()
+        logger.info(f"Saving cache to {self._cache_dir()}...")
+        t0 = time.time()
+        np.save(data_p, self.data)
+        np.save(labels_p, self.labels)
+        np.save(pidx_p, self.patient_index)
+
+        meta = {
+            "version": _CACHE_VERSION,
+            "patient_ids": sorted(self.patient_ids),
+            "normalize": self.normalize,
+            "source_mtimes": self._source_mtimes(),
+        }
+        with open(meta_p, "w") as f:
+            json.dump(meta, f)
+
+        elapsed = time.time() - t0
+        logger.info(f"Cache saved in {elapsed:.1f}s")
 
     def _load_all_patients(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         all_data = []
@@ -134,12 +253,14 @@ class EEGDataset(Dataset):
         shuffle: bool = True,
         random_state: Optional[int] = None,
         level: str = "patient",
+        context: int = 0,
     ):
         """
         k-fold split at different levels: "patient", "window", or "seizure".
         - patient: split by patient, no data leakage across patients.
         - window: split by individual windows; for seizure windows in validation, discard 4 neighbors.
         - seizure: split by contiguous seizure episodes (all windows of a seizure).
+          Use ``context`` to include ±context non-seizure windows around each episode in val.
         """
         if level not in ("patient", "window", "seizure"):
             raise ValueError(f"Invalid level: {level}. Choose 'patient', 'window', or 'seizure'.")
@@ -205,6 +326,19 @@ class EEGDataset(Dataset):
                 folds[i % n_splits].append(episodes[ep_i])
             for fold, eps in enumerate(folds):
                 val_idx = np.concatenate(eps)
+                # add context windows around each seizure episode
+                if context > 0:
+                    context_set = set(val_idx.tolist())
+                    for ep in eps:
+                        for idx in ep:
+                            pid = self.patient_index[idx]
+                            patient_idxs = np.flatnonzero(self.patient_index == pid)
+                            pos = np.searchsorted(patient_idxs, idx)
+                            for offset in range(-context, context + 1):
+                                j = pos + offset
+                                if 0 <= j < len(patient_idxs):
+                                    context_set.add(patient_idxs[j])
+                    val_idx = np.array(sorted(context_set))
                 train_idx = np.setdiff1d(all_indices, val_idx)
                 yield fold, Subset(self, train_idx.tolist()), Subset(self, val_idx.tolist())
 

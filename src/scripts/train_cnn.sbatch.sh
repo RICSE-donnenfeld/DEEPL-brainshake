@@ -14,4 +14,4 @@ set -euo pipefail
 
 source .venv/bin/activate
 
-brainshake run evaluate-cnn -- --epochs 20 --n-splits 5 --random-state 2026
+brainshake run evaluate-cnn -- --epochs 2 --n-splits 5 --random-state 2026

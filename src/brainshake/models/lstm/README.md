@@ -49,13 +49,13 @@ episode_loss() — masks padding (-1), weighted CrossEntropy
 | --------- | ----------------------------------------------------------------------- | ----------------------------------------- |
 | `patient` | Whole patient → one fold                                                | No patient spans train/val                |
 | `window`  | Each window assigned round-robin; ±4 seizure neighbors dropped from val | No augmented seizure copies leak into val |
-| `seizure` | Contiguous seizure episode → one fold; all non-seizure windows → train  | No partial seizure spans train/val        |
+| `seizure` | Contiguous seizure episode → one fold; ±`context` non-seizure windows around each episode included in val (default 20) | No partial seizure spans train/val; val has realistic class mix |
 
 ### SeizureEpisodeDataset details
 
 - **Seizure episodes**: contiguous windows with `label == 1` within the same patient are kept as a single variable-length sequence.
 - **Non-seizure segments**: background windows are chunked into fixed-length segments (default `non_seizure_len = 10`) so they don't produce extremely long sequences.
-- **Feature extraction**: `mean` pool (default) reduces each `[21, 128]` window to a 21-d vector; option `pool="none"` flattens to 2688-d.
+- **Feature extraction**: `std` pool (default) takes per-channel standard deviation (preserves amplitude for zero-centered oscillating EEG); other options: `mean` (risky — averages to ~0), `mean_std` (42-d), `none` (2688-d, full waveform), `conv_proj` (Conv1d projects raw [21,128] to 32 channels — fast alternative to `none`).
 
 ## Usage
 
@@ -70,7 +70,7 @@ brainshake run evaluate-lstm -- --n-splits 5 --level patient --epochs 20
 brainshake run evaluate-lstm -- --n-splits 2 --patient-ids 1 2 --epochs 5
 ```
 
-Results are saved to `out/benchmarks/lstm.json`.
+Results are saved to `out/benchmarks/lstm{suffix}.json`.
 
 ## Hyperparameters
 
@@ -82,6 +82,8 @@ Results are saved to `out/benchmarks/lstm.json`.
 | `lr`              | 1e-3                   |
 | `batch_size`      | 32                     |
 | `non_seizure_len` | 10                     |
+| `pool`            | std (21-d)             |
+| `context`         | 20 (windows around each seizure episode in val) |
 | `pool`            | mean (21-d per window) |
 
 ## Files

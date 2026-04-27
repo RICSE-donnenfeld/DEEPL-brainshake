@@ -1,0 +1,11 @@
+%% Overall pipeline overview
+flowchart LR
+    data["CHB-MIT EEG<br/>24 patients<br/>571k windows"] --> split{"CV level"}
+    split -->|"patient"| thr["Threshold<br/>std/range rules"]
+    split -->|"patient"| rf["Random Forest<br/>200 trees"]
+    split -->|"patient"| cnn["CNN<br/>3xConv1d + FC"]
+    split -->|"seizure<br/>ctx=20"| lstm["LSTM<br/>2-layer episodes"]
+    thr --> eval["Metrics:<br/>acc, prec, rec, F1"]
+    rf --> eval
+    cnn --> eval
+    lstm --> eval

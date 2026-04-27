@@ -25,44 +25,46 @@ echo "============================================================"
 # 1. CNN × 3 split levels
 # ------------------------------------------------------------------
 for LEVEL in patient window seizure; do
-    echo ""
-    echo ">>> CNN  level=${LEVEL}"
-    brainshake run evaluate-cnn -- \
-        --epochs 30 \
-        --n-splits 5 \
-        --random-state 2026 \
-        --level "${LEVEL}" \
-        --suffix "_${LEVEL}"
+	echo ""
+	echo ">>> CNN  level=${LEVEL}"
+	brainshake run evaluate-cnn -- \
+		--epochs 2 \
+		--n-splits 5 \
+		--random-state 2026 \
+		--level "${LEVEL}" \
+		--suffix "_${LEVEL}"
 done
 
 # ------------------------------------------------------------------
 # 2. LSTM × 3 split levels  (pool=std, default settings)
 # ------------------------------------------------------------------
 for LEVEL in patient window seizure; do
-    echo ""
-    echo ">>> LSTM level=${LEVEL} pool=std"
-    brainshake run evaluate-lstm -- \
-        --epochs 30 \
-        --n-splits 5 \
-        --random-state 2026 \
-        --level "${LEVEL}" \
-        --pool std \
-        --suffix "_std_${LEVEL}"
+	echo ""
+	echo ">>> LSTM pool=std level=${LEVEL}"
+	brainshake run evaluate-lstm -- \
+		--epochs 2 \
+		--n-splits 5 \
+		--random-state 2026 \
+		--level "${LEVEL}" \
+		--pool std \
+		--context 20 \
+		--suffix "_std_${LEVEL}"
 done
 
 # ------------------------------------------------------------------
 # 3. LSTM pooling sweep  (seizure-level only)
 # ------------------------------------------------------------------
-for POOL in mean std mean_std none; do
-    echo ""
-    echo ">>> LSTM seizure pool=${POOL}"
-    brainshake run evaluate-lstm -- \
-        --epochs 30 \
-        --n-splits 5 \
-        --random-state 2026 \
-        --level seizure \
-        --pool "${POOL}" \
-        --suffix "_${POOL}_seizure"
+for POOL in mean std mean_std conv_proj; do
+	echo ""
+	echo ">>> LSTM seizure pool=${POOL}"
+	brainshake run evaluate-lstm -- \
+		--epochs 2 \
+		--n-splits 5 \
+		--random-state 2026 \
+		--level seizure \
+		--pool "${POOL}" \
+		--context 20 \
+		--suffix "_${POOL}_seizure"
 done
 
 # ------------------------------------------------------------------
@@ -77,7 +79,7 @@ done
 #     echo ""
 #     echo ">>> LSTM seizure pool=std hidden_size=${HS}"
 #     brainshake run evaluate-lstm -- \
-#         --epochs 30 \
+#         --epochs 2 \
 #         --n-splits 5 \
 #         --random-state 2026 \
 #         --level seizure \
@@ -89,16 +91,17 @@ done
 # 5. LSTM non-seizure-episode length sweep  (seizure-level, pool=std)
 # ------------------------------------------------------------------
 for NSL in 5 10 20 50; do
-    echo ""
-    echo ">>> LSTM seizure pool=std non_seizure_len=${NSL}"
-    brainshake run evaluate-lstm -- \
-        --epochs 30 \
-        --n-splits 5 \
-        --random-state 2026 \
-        --level seizure \
-        --pool std \
-        --non-seizure-len "${NSL}" \
-        --suffix "_std_seizure_nsl${NSL}"
+	echo ""
+	echo ">>> LSTM seizure pool=std non_seizure_len=${NSL}"
+	brainshake run evaluate-lstm -- \
+		--epochs 2 \
+		--n-splits 5 \
+		--random-state 2026 \
+		--level seizure \
+		--pool std \
+		--context 20 \
+		--non-seizure-len "${NSL}" \
+		--suffix "_std_seizure_nsl${NSL}"
 done
 
 echo ""

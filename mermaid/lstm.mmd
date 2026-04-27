@@ -1,0 +1,14 @@
+%% LSTM pipeline — horizontal
+flowchart LR
+    data["CHB-MIT EEG [N, 21, 128]"] --> seizure_kfold["5-fold<br/>seizure CV<br/>ctx=20"]
+    seizure_kfold --> episode["Group into<br/>episodes"]
+    episode --> pool{"Pool"}
+    pool --> std["std → [seq,21]"]
+    pool --> mean_std["mean_std<br/>→ [seq,42]"]
+    pool --> conv_proj["conv_proj<br/>→ [seq,32]"]
+    std --> packed["Packed<br/>sequences"]
+    mean_std --> packed
+    conv_proj --> packed
+    packed --> lstm["LSTM<br/>hidden=128<br/>layers=2"]
+    lstm --> train["Adam(lr=1e-3)<br/>CE(class-wtd)<br/>2 epochs"]
+    train --> evaluate["Per-window<br/>metrics"]

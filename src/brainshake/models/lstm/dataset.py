@@ -31,6 +31,7 @@ class SeizureEpisodeDataset(Dataset):
       "mean"     → mean per channel                 [seq_len, 21]  (risky — EEG oscillates around 0)
       "mean_std" → concatenation of mean and std     [seq_len, 42]
       "none"     → flatten the full window          [seq_len, 2688]
+      "conv_proj" → keep raw window [seq_len, 21, 128] for Conv1d projection inside the model
     """
 
     def __init__(
@@ -111,7 +112,9 @@ class SeizureEpisodeDataset(Dataset):
         windows = self.base.data[ep]  # [seq_len, 21, 128]
         labels = self.base.labels[ep]  # [seq_len]
 
-        if self.pool == "mean":
+        if self.pool == "conv_proj":
+            features = windows  # [seq_len, 21, 128] — kept raw for Conv1d projection
+        elif self.pool == "mean":
             features = windows.mean(axis=2)  # [seq_len, 21]
         elif self.pool == "std":
             features = windows.std(axis=2)  # [seq_len, 21]
@@ -135,17 +138,28 @@ def pad_collate(
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Collate variable-length episodes into a padded batch.
+    Handles both 2-D features [seq_len, n_features] and
+    3-D features [seq_len, 21, 128] (conv_proj mode).
 
     Returns:
-        padded_feats:  [batch, max_len, n_features]
-        padded_labels: [batch, max_len]   (padding value = -1)
-        lengths:       [batch]
+        padded_feats:  [batch, max_len, n_features] or [batch, max_len, 21, 128]
+        padded_labels:  [batch, max_len]   (padding value = -1)
+        lengths:        [batch]
     """
     feats = [item[0] for item in batch]
     labels = [item[1] for item in batch]
     lengths = torch.tensor([f.size(0) for f in feats], dtype=torch.long)
 
-    padded_feats = nn.utils.rnn.pad_sequence(feats, batch_first=True)
+    if feats[0].dim() == 3:
+        # conv_proj mode: [seq_len, 21, 128] — pad along seq_len dimension
+        max_len = max(f.size(0) for f in feats)
+        c, t = feats[0].shape[1], feats[0].shape[2]
+        padded_feats = feats[0].new_zeros(len(feats), max_len, c, t)
+        for i, f in enumerate(feats):
+            padded_feats[i, :f.size(0)] = f
+    else:
+        padded_feats = nn.utils.rnn.pad_sequence(feats, batch_first=True)
+
     padded_labels = nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=-1)
 
     return padded_feats, padded_labels, lengths

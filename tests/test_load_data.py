@@ -65,3 +65,27 @@ def test_k_fold_seizure_level_episodes(synthetic_one_patient):
     for (fold, train, val), exp in zip(folds, expected):
         assert set(val.indices) == exp
         assert set(train.indices) | set(val.indices) == set(range(len(ds.labels)))
+
+
+def test_k_fold_seizure_level_with_context(synthetic_one_patient):
+    ds = synthetic_one_patient
+    # labels: [0,0,1,1,0,0,1,0,1,1,0,0]
+    # episodes: [2,3], [6], [8,9]
+    # With context=2, val for episode [2,3] should include indices 0,1,2,3,4,5
+    # but NOT overlap with other episodes' context in same fold
+    folds = list(ds.k_fold(n_splits=3, shuffle=False, random_state=0, level="seizure", context=2))
+    # Episode [2,3] with context=2 adds {0,1,4,5} → val={0,1,2,3,4,5}
+    val0 = set(folds[0][2].indices)
+    assert {2, 3}.issubset(val0), "seizure windows must be in val"
+    # Check that context windows around episode are included
+    for idx in [0, 1, 4, 5]:
+        assert idx in val0, f"context window {idx} should be in val"
+
+
+def test_k_fold_seizure_level_no_context(synthetic_one_patient):
+    ds = synthetic_one_patient
+    # Without context, val should only contain seizure windows
+    folds = list(ds.k_fold(n_splits=3, shuffle=False, random_state=0, level="seizure", context=0))
+    for _, train, val in folds:
+        for idx in val.indices:
+            assert ds.labels[idx] == 1, "without context, val should only contain seizure windows"

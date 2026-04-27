@@ -1,0 +1,14 @@
+%% Data preprocessing flow — horizontal
+flowchart LR
+    raw["Raw CHB-MIT EEG<br/>24 patients"] --> window["1s windows<br/>[N, 21, 128]"]
+    window --> label["Label: 0 or 1"]
+    label --> imbalance["Imbalance<br/>571k vs 3.4k"]
+    imbalance --> pipelines{"4 Pipelines"}
+    pipelines --> thr_path["Threshold<br/>std, range, min, max"]
+    pipelines --> rf_path["RF<br/>8 features"]
+    pipelines --> cnn_path["CNN<br/>raw [21×128]"]
+    pipelines --> lstm_path["LSTM<br/>std pool [seq, 21]"]
+    thr_path --> weight["Class-weighted loss"]
+    rf_path --> weight
+    cnn_path --> weight
+    lstm_path --> weight

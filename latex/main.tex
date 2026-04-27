@@ -70,9 +70,9 @@ in Electro-Encephalogram Signals}\\[4pt]
 \begin{abstract}
 \noindent
 This report investigates the automated detection of epileptic seizures in EEG signals using four approaches:
-a basic threshold-based algorithm operating on raw signal statistics, a random forest trained on handcrafted time-domain features, a one-dimensional convolutional neural network (CNN) trained on raw signal windows, and a recurrent LSTM that processes windows as temporal episodes.
+a basic threshold-based algorithm operating on raw signal statistics, a random forest trained on eight handcrafted time-domain features, a one-dimensional convolutional neural network (CNN) trained on raw signal windows, and a recurrent LSTM that processes windows as temporal episodes.
 EEG recordings from 24 patients are segmented into 1\,s windows, totalling \num{571905} samples (\num{3480} seizure windows) and evaluated under patient-level and seizure-level cross-validation.
-The CNN achieves higher accuracy than the random forest, while the LSTM exploits the sequential structure of seizure episodes.
+In a 2-fold pilot, the CNN achieves the highest average accuracy, followed by the threshold and random forest baselines; the LSTM exploits the sequential structure of seizure episodes and its full evaluation is pending.
 \end{abstract}
 
 \tableofcontents
@@ -92,10 +92,11 @@ The CNN achieves higher accuracy than the random forest, while the LSTM exploits
   \item[Patient-level] Aggregation of data belonging to the same patient.
   \item[Precision] Among predicted positives, the fraction that are truly positive; $\mathrm{TP}/(\mathrm{TP}+\mathrm{FP})$.
   \item[Recall] Among true positives, the fraction correctly predicted positive; $\mathrm{TP}/(\mathrm{TP}+\mathrm{FN})$. Syn.\ sensitivity.
-  \item[Seizure-level] Splitting by contiguous seizure episodes so no partial episode crosses train/validation.
-  \item[Specificity] Among true negatives, the fraction correctly predicted negative; $\mathrm{TN}/(\mathrm{TN}+\mathrm{FP})$.
-  \item[TPR] True positive rate. Same as recall; $\mathrm{TP}/(\mathrm{TP}+\mathrm{FN})$.
-  \item[Window-level] Splitting by individual windows, dropping $\pm 4$ seizure neighbors from validation.
+\item[Seizure-level] Splitting by contiguous seizure episodes so no partial episode crosses train/validation; with \texttt{context=20} the validation set includes $\pm20$ windows around each episode for a realistic class mix.
+\item[Specificity] Among true negatives, the fraction correctly predicted negative; $\mathrm{TN}/(\mathrm{TN}+\mathrm{FP})$.
+\item[TPR] True positive rate. Same as recall; $\mathrm{TP}/(\mathrm{TP}+\mathrm{FN})$.
+\item[Window-level] Splitting by individual windows, dropping $\pm 4$ seizure neighbors from validation.
+\item[Pool] Per-window feature reduction for the LSTM. Options: \texttt{std} (21-d, channel standard deviation), \texttt{mean} (21-d, risky for zero-centered EEG), \texttt{mean\_std} (42-d), \texttt{none} ($21\times128$), \texttt{conv\_proj} (Conv1d projection from $21\times128$ to 32 channels, fast alternative to \texttt{none}).
 \end{description}
 
 \newpage
@@ -144,59 +145,83 @@ non-seizure windows, highlighting how dispersion metrics (standard deviation and
 We process raw EEG windows through four parallel pipelines: (1) apply a simple threshold-based classifier on raw signal statistics; (2) extract time-domain features and train a random forest classifier; (3) feed raw windows into a one-dimensional CNN; (4) group windows into temporal episodes and feed them to a two-layer LSTM.
 Models are evaluated using patient-level, window-level, and seizure-level cross-validation splits depending on the pipeline.
 \subsection{Preprocessing}
-For the CNN pipeline, we normalize each EEG window by subtracting its mean and dividing by its standard deviation before model input.
+For the CNN pipeline, the dataset supports global z-score normalization (subtracting the dataset-wide mean and dividing by the dataset-wide standard deviation), though in our experiments we use unnormalized windows (\texttt{normalize=False}); class-weighted cross-entropy compensates for the label imbalance instead.
 For the threshold and random forest pipelines, we compute raw time-domain features (mean, standard deviation, range, min, max) on unnormalized windows.
-For the LSTM pipeline, each 1\,s window is mean-pooled across its 128 time-steps to produce a 21-dimensional feature vector; contiguous same-label windows from the same patient are grouped into variable-length episodes.
+For the LSTM pipeline, each 1\,s window is reduced to a 21-dimensional feature vector by standard-deviation pooling (default \texttt{pool="std"}); contiguous same-label windows from the same patient are grouped into variable-length episodes.
 
 \subsection{Train test and validation}
 We implement three stratification levels for cross-validation via \texttt{EEGDataset.k\_fold(level=}\ldots\texttt{)}:
 \begin{itemize}
 \item \textbf{Patient-level} (\texttt{level="patient"}): each patient's windows stay in one fold; no patient spans train and validation.
 \item \textbf{Window-level} (\texttt{level="window"}): windows are assigned round-robin; any seizure window in validation drops its $\pm 4$ neighbors (same patient) to prevent augmentation leakage.
-\item \textbf{Seizure-level} (\texttt{level="seizure"}): contiguous seizure episodes (same patient, same label) stay whole; episodes are distributed across folds so no partial seizure crosses the train/validation boundary.
+\item \textbf{Seizure-level} (\texttt{level="seizure"}): contiguous seizure episodes (same patient, same label) stay whole; episodes are distributed across folds so no partial seizure crosses the train/validation boundary. A \texttt{context} parameter (default 20) includes $\pm20$ non-seizure windows around each episode in the validation set, giving a realistic class mix for evaluation.
 \end{itemize}
 The CNN and random forest use patient-level splits; the LSTM uses seizure-level splits to preserve temporal structure within episodes.
 
-\subsection{Approach 1: Threshold Classifier}
-We implement a simple threshold-based classifier that flags a window as seizure if its standard deviation or range exceeds fold-specific thresholds.
-Thresholds are optimized via grid search on each training fold.
-
-\subsection{Approach 2: Random Forest Classifier}
-We compute the mean and standard deviation of each window as features and train a random forest with 100 trees (default hyperparameters) to classify seizure vs.\ non-seizure windows.
-
-\subsection{Approach 3: CNN Classifier}
-We implement a one-dimensional CNN consisting of three convolutional–ReLU–maxpool blocks followed by fully connected layers and dropout ($p=0.3$).
-The model is trained with Adam (learning rate $10^{-3}$) for 50 epochs and class-weighted cross-entropy to offset label imbalance.
-
-\subsection{Approach 4: LSTM Classifier}
-We implement a two-layer LSTM that processes variable-length episodes of mean-pooled EEG windows.
-Contiguous seizure windows from the same patient are grouped into episodes; non-seizure windows are segmented into fixed-length chunks of 10 windows.
-The model receives sequences of shape $[\text{batch}, \text{seq\_len}, 21]$ and produces per-window logits $[\text{batch}, \text{seq\_len}, 2]$.
-Packed sequences mask out padding, and class-weighted cross-entropy (with \texttt{ignore\_index=-1} for padding) addresses label imbalance.
-Seizure-level $k$-fold ensures that entire episodes are either in train or validation, preserving temporal integrity.
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\linewidth]{data_flow.png}
+\caption{Data preprocessing and pipeline branching. All four pipelines start from the same raw EEG windows; class weighting (not shown) compensates for the severe class imbalance.}
+\label{fig:data_flow}
+\end{figure}
 
 \begin{figure}[H]
 \centering
-\begin{subfigure}[b]{0.32\linewidth}
+\includegraphics[width=0.85\linewidth]{cv_strategies.png}
+\caption{Cross-validation strategies: patient-level (_threshold, RF, CNN_), window-level (CNN alternative), and seizure-level (LSTM).}
+\label{fig:cv_strategies}
+\end{figure}
+
+\subsection{Approach 1: Threshold Classifier}
+We implement a threshold-based classifier that flags a window as seizure if its standard deviation or range exceeds fold-specific thresholds; optional min/max thresholds further flag windows with extreme amplitude excursions.
+Thresholds are optimized via grid search on each training fold.
+
+\subsection{Approach 2: Random Forest Classifier}
+We compute eight handcrafted features per window—mean, standard deviation, min, max, range, peak-to-peak, std-to-range ratio, and range-plus-std—and train a random forest with 200 trees and balanced class weighting to classify seizure vs.\ non-seizure windows.
+
+\subsection{Approach 3: CNN Classifier}
+We implement a one-dimensional CNN consisting of three convolutional–ReLU–maxpool blocks followed by fully connected layers and dropout ($p=0.3$).
+The model is trained with Adam (learning rate $10^{-3}$) for 2 epochs and class-weighted cross-entropy to offset label imbalance.
+
+\subsection{Approach 4: LSTM Classifier}
+We implement a two-layer LSTM that processes variable-length episodes of EEG windows.
+Each 1\,s window is reduced to a 21-dimensional feature vector by taking the per-channel standard deviation (\texttt{pool="std"}), which preserves amplitude information that averaging would collapse to near-zero for oscillating EEG signals.
+Alternative pooling options (\texttt{mean} (21-d), \texttt{mean\_std} (42-d), \texttt{none} ($21\times128$)) are evaluated in the experiments.
+Contiguous seizure windows from the same patient are grouped into episodes; non-seizure windows are segmented into fixed-length chunks of 10 windows.
+The model receives sequences of shape $[\text{batch}, \text{seq\_len}, n_\text{features}]$ and produces per-window logits $[\text{batch}, \text{seq\_len}, 2]$.
+Packed sequences mask out padding, and class-weighted cross-entropy (with \texttt{ignore\_index=-1} for padding) addresses label imbalance.
+Seizure-level $k$-fold with \texttt{context=20} ensures that entire episodes plus surrounding context are either in train or validation, preserving temporal integrity while providing a realistic class mix in the validation set.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.48\linewidth}
 \includegraphics[width=\linewidth]{threshold.png}
 \caption{Threshold pipeline}
 \label{fig:threshold_pipeline}
 \end{subfigure}
-\begin{subfigure}[b]{0.32\linewidth}
+\hfill
+\begin{subfigure}[b]{0.48\linewidth}
 \includegraphics[width=\linewidth]{randomforest.png}
 \caption{Random forest pipeline}
 \label{fig:rf_pipeline}
 \end{subfigure}
-\begin{subfigure}[b]{0.32\linewidth}
+\vspace{0.3cm}
+\begin{subfigure}[b]{0.48\linewidth}
 \includegraphics[width=\linewidth]{cnn.png}
 \caption{CNN pipeline}
 \label{fig:cnn_pipeline}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.48\linewidth}
+\includegraphics[width=\linewidth]{lstm.png}
+\caption{LSTM pipeline}
+\label{fig:lstm_pipeline}
 \end{subfigure}
 \caption{Simplified Mermaid diagrams summarizing each classification pipeline.}
 \label{fig:pipeline_diagrams}
 \end{figure}
 
-These diagrams highlight how each approach processes the raw EEG windows: the threshold baseline relies on hard limits, the random forest vectorizes handcrafted features, and the CNN learns representations end-to-end from normalized time series.
+These diagrams highlight how each approach processes the raw EEG windows: the threshold baseline relies on hard limits, the random forest vectorizes handcrafted features, the CNN learns representations end-to-end from raw time series, and the LSTM groups windows into episodes for temporal modelling.
 
 
 % ==========================================================
@@ -216,9 +241,10 @@ Key development steps:
 
 % ==========================================================
 \section{Experimental Design}
-Models are evaluated under 5-fold patient-level cross-validation.
+Models are evaluated under 5-fold patient-level cross-validation (CNN and random forest) or seizure-level cross-validation (LSTM).
 Windows from each patient appear in exactly one test fold so we avoid data leakage.
-We report accuracy for each fold and average across folds.
+We report accuracy, precision, recall, and F1 for each fold and average across folds.
+At the time of writing, pilot runs with 2 folds are available; full 5-fold results will be appended once the GPU experiments finish.
 \label{sec:experiments}
 
 
@@ -229,14 +255,16 @@ We report accuracy for each fold and average across folds.
 \toprule
 Parameter & Random Forest & CNN & LSTM \\
 \midrule
-Trees / filters / layers & 100 & [32,64,128] & 2 LSTM \\
+Trees / filters / layers & 200 & [32,64,128] & 2 LSTM \\
 Kernel sizes & -- & [5,5,3] & -- \\
 Hidden size & -- & -- & 128 \\
+Pooling & -- & -- & std (21-d) \\
+Class weighting & balanced & balanced & balanced \\
 Learning rate & -- & $10^{-3}$ & $10^{-3}$ \\
-Batch size & -- & 64 & 32 \\
-Epochs & -- & 50 & 20 \\
+Batch size & -- & 32 & 32 \\
+Epochs & -- & 2 & 2 \\
 Dropout & -- & 0.3 & 0.3 \\
-CV level & patient & patient & seizure \\
+CV level & patient & patient & seizure (context=20) \\
 \bottomrule
 \end{tabular}
 \caption{Model hyperparameters.}
@@ -253,7 +281,7 @@ CV level & patient & patient & seizure \\
 \label{fig:accuracy_by_fold}
 \end{figure}
 
-Per-fold accuracy shows how the CNN stays stable above 80\% in most folds and avoids large swings, indicating the network generalizes well across patients when tested fold-by-fold.
+Per-fold accuracy reveals high variability across folds: the CNN achieves 94.5\% on one fold but only 64.8\% on another, reflecting the difficulty of generalising across patients that the model has never seen.
 
 \begin{figure}[H]
 \centering
@@ -262,27 +290,29 @@ Per-fold accuracy shows how the CNN stays stable above 80\% in most folds and av
 \label{fig:avg_accuracy}
 \end{figure}
 
-The average accuracy plot aggregates the fold results, making it easy to compare the three pipelines—threshold, random forest, and CNN—and confirms that the CNN leads the pack, followed by the forest.
+The average accuracy plot aggregates fold results, comparing the threshold, random forest, and CNN pipelines. In the current 2-fold pilot run, the CNN achieves the highest average accuracy (\num{0.797}), followed by the threshold baseline (\num{0.766}) and the random forest (\num{0.758}). Full 5-fold cross-validation results will be reported once the GPU experiments complete.
 
 
-\noindent \textbf{Summary.} The CNN accuracy per fold and average accuracy charts illustrate how the model generalizes steadily above 80\% across patients, while the performance comparison table ranks the threshold, random forest, and CNN pipelines to show the deep model leading the pack.
-The LSTM adds a sequential perspective: by processing windows in temporal order within episodes, it can exploit the pre-ictal → ictal → post-ictal transition that individual-window classifiers ignore.
-These plots are based on the latest exported metrics in `out/`.
-The threshold classifier baseline achieves an average accuracy of \num{0.766} across folds, while the random forest and CNN improve upon it.
+\noindent \textbf{Summary.} The CNN accuracy per fold and average accuracy charts show that deep models can outperform classical baselines, but also reveal substantial cross-patient variability.
+The LSTM adds a sequential perspective: by processing windows in temporal order within episodes, it can exploit the pre-ictal $\rightarrow$ ictal $\rightarrow$ post-ictal transition that individual-window classifiers ignore.
+These plots are based on a 2-fold pilot run; full 5-fold results are pending.
+The threshold classifier baseline achieves an average accuracy of \num{0.766}, the random forest \num{0.758}, and the CNN \num{0.797}.
 
 
 % ==========================================================
 \section{Discussion}
-Our results show that the CNN consistently outperforms the random forest in accuracy with lower variability across folds.
-The deep model effectively captures temporal patterns in EEG signals that simple features cannot represent.
+Our pilot results show that the CNN can outperform the random forest in average accuracy, but with high variability across folds—the model struggles on certain patients.
+The deep model captures temporal patterns in EEG signals that simple features cannot fully represent, yet patient heterogeneity remains a challenge.
+LSTM results are pending and will be reported once the ongoing GPU experiments finish.
 \label{sec:discussion}
 
 
 % ==========================================================
 \section{Conclusion}
 We compared a threshold baseline, a feature-based random forest, an end-to-end CNN, and a temporal LSTM for seizure detection in EEG.
-The CNN achieved the best performance under patient-level cross-validation, demonstrating the value of expressive, end-to-end models.
-The LSTM leverages seizure-level splits to preserve episode integrity and exploit temporal structure; future work will compare it directly against the CNN under matching splits and explore multichannel spatial information combined with longer temporal context.
+In a 2-fold pilot, the CNN achieved the highest average accuracy (\num{0.797}), outperforming both the threshold baseline (\num{0.766}) and the random forest (\num{0.758}), though cross-patient variability was high.
+The LSTM leverages seizure-level splits to preserve episode integrity and exploit temporal structure; its results are pending from ongoing GPU experiments.
+Future work will compare all models under matching seizure-level splits and explore multichannel spatial information combined with longer temporal context.
 \label{sec:conclusion}
 
 
@@ -363,7 +393,22 @@ class SeizureLSTM(nn.Module):
                 out, batch_first=True)
         return self.classifier(out)
 \end{lstlisting}
-The LSTM processes variable-length episodes of mean-pooled EEG windows and produces per-window seizure/non-seizure logits, using packed sequences to handle padding and seizure-level k-fold to preserve temporal integrity.
+The LSTM processes variable-length episodes of EEG windows and produces per-window seizure/non-seizure logits, using packed sequences to handle padding, standard-deviation pooling to preserve amplitude, and seizure-level k-fold with context to preserve temporal integrity.
+
+\begin{lstlisting}[language=Python, caption={LSTM Pooling Options}, label=lst:lstm_pool]
+# Per-window feature reduction (21, 128) -> n_features
+if self.pool == "std":      # default — preserves amplitude
+    features = windows.std(axis=2)    # [seq_len, 21]
+elif self.pool == "mean":   # risky — averages oscillating signal to ~0
+    features = windows.mean(axis=2)   # [seq_len, 21]
+elif self.pool == "mean_std":
+    features = np.concatenate(         # [seq_len, 42]
+        [windows.mean(axis=2), windows.std(axis=2)], axis=-1)
+elif self.pool == "none":   # full waveform, heavy compute
+    features = windows.reshape(seq_len, -1)  # [seq_len, 2688]
+elif self.pool == "conv_proj":  # Conv1d projection, fast
+    features = windows                     # [seq_len, 21, 128]
+\end{lstlisting}
 
 
 \end{document}
