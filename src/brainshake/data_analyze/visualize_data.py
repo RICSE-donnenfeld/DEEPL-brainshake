@@ -1,4 +1,5 @@
 import json
+import argparse
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -6,16 +7,38 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-OUTPUT_DIR = Path("out/data_analyze")
-SUMMARY_PATH = OUTPUT_DIR / "summary.json"
-OUTPUT_DIR.mkdir(exist_ok=True)
+DEFAULT_OUTPUT_DIR = Path("out/data_analyze")
+DEFAULT_SUMMARY_PATH = DEFAULT_OUTPUT_DIR / "summary.json"
+DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Mutable output directory used by the plotting helpers.
+OUTPUT_DIR = DEFAULT_OUTPUT_DIR
 
 
-def load_summary(path: Path = SUMMARY_PATH) -> Dict[str, Any]:
+def load_summary(path: Path) -> Dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"Summary not found: {path}")
     with path.open() as f:
         return json.load(f)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Create visualizations from out/data_analyze/summary.json"
+    )
+    parser.add_argument(
+        "--summary-path",
+        type=Path,
+        default=DEFAULT_SUMMARY_PATH,
+        help="Path to the summary.json produced by analyze-data.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=DEFAULT_OUTPUT_DIR,
+        help="Directory to write PNG visualizations.",
+    )
+    return parser.parse_args()
 
 
 def _annotate_bars(ax, bars) -> None:
@@ -206,13 +229,20 @@ def main() -> Dict[str, Any]:
     print("CREATING VISUALIZATIONS FROM summary.json")
     print("=" * 60)
 
-    summary = load_summary()
+    args = parse_args()
+    output_dir: Path = args.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    summary = load_summary(args.summary_path)
+    global OUTPUT_DIR
+    OUTPUT_DIR = output_dir
+
     create_simple_comparison(summary)
     create_metric_trends(summary)
     create_summary_table(summary)
 
     print("=" * 60)
-    print("VISUALIZATIONS SAVED TO: outputs_real/")
+    print(f"VISUALIZATIONS SAVED TO: {output_dir}/")
     print("=" * 60)
     return summary
 

@@ -2,14 +2,14 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import json
+import argparse
 from typing import Any, Dict, List, Optional, Tuple, Sequence
 from numpy.typing import NDArray
 
 from ..data_handling.extract_features import FeatureDict, extract_basic_features
 
-DATA_DIR: Path = Path("data/Epilepsy")
-OUTPUT_DIR: Path = Path("out/data_analyze")
-OUTPUT_DIR.mkdir(exist_ok=True)
+DEFAULT_DATA_DIR: Path = Path("data/Epilepsy")
+DEFAULT_OUTPUT_DIR: Path = Path("out/data_analyze")
 
 
 # ============================================================================
@@ -19,6 +19,8 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 def load_patient(
     patient_id: int,
+    *,
+    data_dir: Path,
 ) -> Tuple[Optional[NDArray[Any]], Optional[NDArray[Any]]]:
     """
     Load EEG data for one patient.
@@ -29,8 +31,8 @@ def load_patient(
     """
     pid = f"chb{patient_id:02d}"
 
-    npz_path = DATA_DIR / f"{pid}_seizure_EEGwindow_1.npz"
-    meta_path = DATA_DIR / f"{pid}_seizure_metadata_1.parquet"
+    npz_path = data_dir / f"{pid}_seizure_EEGwindow_1.npz"
+    meta_path = data_dir / f"{pid}_seizure_metadata_1.parquet"
 
     if not npz_path.exists():
         print(f"  WARNING: Patient {patient_id} not found")
@@ -49,6 +51,8 @@ def load_patient(
 
 def load_all_patients(
     patient_ids: Sequence[int],
+    *,
+    data_dir: Path,
 ) -> Tuple[List[NDArray[Any]], List[NDArray[Any]], List[Dict[str, Any]]]:
     """
     Load data for multiple patients.
@@ -63,7 +67,7 @@ def load_all_patients(
     patient_info = []
 
     for pid in patient_ids:
-        eeg, labels = load_patient(pid)
+        eeg, labels = load_patient(pid, data_dir=data_dir)
         if eeg is not None and labels is not None:
             all_eeg.append(eeg)
             all_labels.append(labels)
@@ -95,9 +99,11 @@ def analyze_single_window(
 
 def analyze_patient(
     patient_id: int,
+    *,
+    data_dir: Path,
 ) -> Optional[Tuple[List[FeatureDict], NDArray[Any]]]:
     """Analyze all windows for one patient."""
-    eeg_data, labels = load_patient(patient_id)
+    eeg_data, labels = load_patient(patient_id, data_dir=data_dir)
 
     if eeg_data is None or labels is None:
         return None
@@ -143,23 +149,67 @@ def compare_seizure_vs_nonseizure(metrics_list: List[Dict[str, Any]]) -> Dict[st
 # ============================================================================
 
 
+def _available_patients(data_dir: Path) -> List[int]:
+    available: List[int] = []
+    for pid in range(1, 25):
+        if (data_dir / f"chb{pid:02d}_seizure_EEGwindow_1.npz").exists():
+            available.append(pid)
+    return available
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Analyze CHB-MIT EEG windows and export summary statistics."
+    )
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=DEFAULT_DATA_DIR,
+        help="Dataset directory containing chbXX_seizure_EEGwindow_1.npz and parquet metadata.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=DEFAULT_OUTPUT_DIR,
+        help="Directory to write summary.json.",
+    )
+    parser.add_argument(
+        "--patient-ids",
+        type=int,
+        nargs="+",
+        help="Explicit patient IDs to analyze (overrides --all-patients).",
+    )
+    parser.add_argument(
+        "--all-patients",
+        action="store_true",
+        help="Analyze all available patients (default is a small CI-friendly subset).",
+    )
+    return parser.parse_args()
+
+
 def main() -> Dict[str, Any]:
+    args = parse_args()
+    data_dir: Path = args.data_dir
+    output_dir: Path = args.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     print("=" * 70)
     print("EEG EPILEPSY ANALYSIS - REAL PATIENT DATA")
     print("=" * 70)
 
     # Check available patients
-    available = []
-    for pid in range(1, 25):
-        if (DATA_DIR / f"chb{pid:02d}_seizure_EEGwindow_1.npz").exists():
-            available.append(pid)
+    available = _available_patients(data_dir)
 
     print(f"\nFound {len(available)} patients with data")
     print(f"Patients: {available[:5]}... (showing first 5)")
 
-    # CI-friendly subset: analyze only first 3 patients
-    analyze_patients = available[:3]
-    # Full run: analyze_patients = available
+    if args.patient_ids:
+        analyze_patients = [int(pid) for pid in args.patient_ids]
+    elif args.all_patients:
+        analyze_patients = list(available)
+    else:
+        # CI-friendly subset: analyze only first 3 patients
+        analyze_patients = available[:3]
     print(f"\nAnalyzing patients: {analyze_patients}")
 
     # Collect all metrics
@@ -170,7 +220,7 @@ def main() -> Dict[str, Any]:
         print(f"\n--- Patient {patient_id} ---")
 
         # Analyze patient
-        patient_result = analyze_patient(patient_id)
+        patient_result = analyze_patient(patient_id, data_dir=data_dir)
         if patient_result is None:
             continue
         metrics_list, labels = patient_result
@@ -207,14 +257,14 @@ def main() -> Dict[str, Any]:
         },
     }
 
-    summary_path = OUTPUT_DIR / "summary.json"
+    summary_path = output_dir / "summary.json"
     with open(summary_path, "w") as f:
         json.dump(summary, f, indent=2)
     print(f"\nSummary saved: {summary_path.name}")
 
     print("\n" + "=" * 70)
     print("ANALYSIS COMPLETE! Summary ready for visualization.")
-    print(f"Outputs saved to: {OUTPUT_DIR}/")
+    print(f"Outputs saved to: {output_dir}/")
     print("=" * 70)
 
     return summary
