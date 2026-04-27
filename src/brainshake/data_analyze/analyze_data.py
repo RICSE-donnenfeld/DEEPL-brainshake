@@ -157,9 +157,8 @@ def main() -> Dict[str, Any]:
     print(f"\nFound {len(available)} patients with data")
     print(f"Patients: {available[:5]}... (showing first 5)")
 
-    # CI-friendly subset: analyze only first 3 patients
-    analyze_patients = available[:3]
-    # Full run: analyze_patients = available
+    # Full analysis
+    analyze_patients = available
     print(f"\nAnalyzing patients: {analyze_patients}")
 
     # Collect all metrics

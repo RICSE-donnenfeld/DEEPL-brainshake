@@ -20,7 +20,7 @@ style: |
     font-size: 1.2rem;
   }
   table {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     background: rgba(30, 41, 59, 0.5);
   }
   li {
@@ -31,6 +31,14 @@ style: |
   }
   code {
     font-size: 0.75rem;
+  }
+  .columns {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+  }
+  .columns > * {
+    flex: 1;
   }
 ---
 
@@ -83,7 +91,7 @@ Epileptic seizures = abnormal brain electrical activity detectable via EEG.
 
 - **Source**: CHB-MIT scalp EEG, 24 pediatric patients
 - **Windows**: 1s segments → **571,905** total
-- **Seizure**: **3,480** windows (0.6% — heavily imbalanced)
+- **Seizure**: **86,672** windows (15.2% — imbalanced dataset)
 - **Shape**: each window = **21 channels × 128 timesteps**
 
 ---
@@ -102,7 +110,7 @@ Epileptic seizures = abnormal brain electrical activity detectable via EEG.
 <img src="../out/mermaid/data_flow.svg" width="95%">
 
 - No per-window normalization (`normalize=False`)
-- **Class weighting** compensates for ~160:1 imbalance
+- **Class weighting** helps models focus on the seizure minority
 
 ---
 
@@ -263,15 +271,27 @@ High cross-patient variance across all models; CNN ranges 79–93%.
 
 # Results: Main Comparison (5-fold)
 
-<img src="../out/plots/average_accuracy.png" width="48%">
+<div class="columns">
 
-| Model | CV Level | Avg Acc | Avg F1 |
+<div>
+
+<img src="../out/plots/average_accuracy.png" width="100%">
+
+</div>
+
+<div>
+
+| Model | CV | Acc | F1 |
 |---|---|---|---|
 | Threshold | patient | 75.5% | — |
-| Random Forest | patient | 69.0% | — |
+| RF | patient | 69.0% | — |
 | CNN | patient | 86.3% | 0.554 |
 | CNN | seizure | 80.1% | 0.888 |
 | LSTM-std | seizure | **97.2%** | **0.985** |
+
+</div>
+
+</div>
 
 ---
 
@@ -279,15 +299,23 @@ High cross-patient variance across all models; CNN ranges 79–93%.
 
 CNN and LSTM under window-level CV: **97–100% accuracy but 0% F1**
 
-- Round-robin assignment isolates seizure windows among non-seizure
+- Round-robin assignment creates unreliable per-fold class ratios
 - Models learn to predict "non-seizure" for everything → trivially high accuracy
-- **Window-level CV is unsuitable** for this imbalanced task
+- **Window-level CV is unsuitable** for this dataset
 
 ---
 
 # Results: LSTM Pooling (Seizure-Level)
 
-<img src="../out/plots/lstm_pool_avg.png" width="65%">
+<div class="columns">
+
+<div>
+
+<img src="../out/plots/lstm_pool_avg.png" width="100%">
+
+</div>
+
+<div>
 
 | Pooling | Avg Acc | Avg F1 |
 |---|---|---|
@@ -296,13 +324,25 @@ CNN and LSTM under window-level CV: **97–100% accuracy but 0% F1**
 | conv_proj (32-d) | 93.3% | 0.963 |
 | mean_std (42-d) | 61.2% | 0.601 |
 
-> mean_std is unstable (2/5 folds degenerate).
+> mean_std unstable (2/5 folds fail)
+
+</div>
+
+</div>
 
 ---
 
 # Results: Non-Seizure Length Sweep
 
-<img src="../out/plots/lstm_nsl_avg.png" width="55%">
+<div class="columns">
+
+<div>
+
+<img src="../out/plots/lstm_nsl_avg.png" width="100%">
+
+</div>
+
+<div>
 
 | NSL | Avg Acc | Avg F1 |
 |---|---|---|
@@ -311,7 +351,11 @@ CNN and LSTM under window-level CV: **97–100% accuracy but 0% F1**
 | 20 | 5.5% | 0.000 |
 | 50 | 5.5% | 0.000 |
 
-> NSL ≥ 20 causes training collapse.
+> NSL ≥ 20 → training collapse
+
+</div>
+
+</div>
 
 ---
 
@@ -330,7 +374,7 @@ CNN and LSTM under window-level CV: **97–100% accuracy but 0% F1**
 
 - LSTM (seizure-level) achieves best results: **97.2% acc, 0.985 F1**
 - CNN (patient-level): 86.3% acc, 0.554 F1 — high variance across patients
-- Window-level CV is degenerate — inappropriate for imbalanced EEG
+- Window-level CV is degenerate — poor class ratios per fold
 - Mean pooling slightly outperforms std for LSTM
 - **NSL ≤ 10** is essential; NSL ≥ 20 causes collapse
 - **Future**: explore multichannel spatial info, longer temporal context
