@@ -3,10 +3,13 @@ name: Render Slides
 on:
   push:
     paths:
-      - "slides/**"
+      - "slides/slides.md"
+      - "slides/style.css"
       - "out/mermaid/**"
       - "out/plots/**"
       - "out/data_analyze/**"
+    paths-ignore:
+      - "slides/slides.pdf"
   workflow_dispatch:
 
 permissions:
