@@ -6,3 +6,11 @@ flowchart LR
     cnn --> fc["FC: 2048→256<br/>Drop0.3→2"]
     fc --> train["Adam(lr=1e-3)<br/>CE(class-wtd)<br/>2 epochs"]
     train --> evaluate["Per-fold metrics"]
+
+    style data fill:#1e3a5f,stroke:#3b82f6,color:#e2e8f0
+    style kfold fill:#0f766e,stroke:#14b8a6,color:#e2e8f0
+    style loader fill:#312e81,stroke:#8b5cf6,color:#e2e8f0
+    style cnn fill:#312e81,stroke:#8b5cf6,color:#e2e8f0
+    style fc fill:#312e81,stroke:#8b5cf6,color:#e2e8f0
+    style train fill:#78350f,stroke:#f59e0b,color:#e2e8f0
+    style evaluate fill:#14532d,stroke:#22c55e,color:#e2e8f0

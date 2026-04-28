@@ -6,6 +6,14 @@ flowchart LR
     split -->|"patient"| cnn["CNN<br/>3xConv1d + FC"]
     split -->|"seizure<br/>ctx=20"| lstm["LSTM<br/>2-layer episodes"]
     thr --> eval["Metrics:<br/>acc, prec, rec, F1"]
+
+    style data fill:#1e3a5f,stroke:#3b82f6,color:#e2e8f0
+    style split fill:#0f766e,stroke:#14b8a6,color:#e2e8f0
+    style thr fill:#312e81,stroke:#8b5cf6,color:#e2e8f0
+    style rf fill:#312e81,stroke:#8b5cf6,color:#e2e8f0
+    style cnn fill:#312e81,stroke:#8b5cf6,color:#e2e8f0
+    style lstm fill:#312e81,stroke:#8b5cf6,color:#e2e8f0
+    style eval fill:#14532d,stroke:#22c55e,color:#e2e8f0
     rf --> eval
     cnn --> eval
     lstm --> eval

@@ -1,6 +1,6 @@
 %% Data preprocessing flow — horizontal
 flowchart LR
-    raw["Raw CHB-MIT EEG<br/>24 patients"] --> window["1s windows<br/>[N, 21, 128]"]
+    data["CHB-MIT EEG<br/>24 patients<br/>571k windows"] --> window["1s windows<br/>[N, 21, 128]"]
     window --> label["Label: 0 or 1"]
     label --> imbalance["Imbalance<br/>571k vs 3.4k"]
     imbalance --> pipelines{"4 Pipelines"}
@@ -12,3 +12,14 @@ flowchart LR
     rf_path --> weight
     cnn_path --> weight
     lstm_path --> weight
+
+    style data fill:#1e3a5f,stroke:#3b82f6,color:#e2e8f0
+    style window fill:#1e3a5f,stroke:#3b82f6,color:#e2e8f0
+    style label fill:#1e3a5f,stroke:#3b82f6,color:#e2e8f0
+    style imbalance fill:#1e3a5f,stroke:#3b82f6,color:#e2e8f0
+    style pipelines fill:#0f766e,stroke:#14b8a6,color:#e2e8f0
+    style thr_path fill:#312e81,stroke:#8b5cf6,color:#e2e8f0
+    style rf_path fill:#312e81,stroke:#8b5cf6,color:#e2e8f0
+    style cnn_path fill:#312e81,stroke:#8b5cf6,color:#e2e8f0
+    style lstm_path fill:#312e81,stroke:#8b5cf6,color:#e2e8f0
+    style weight fill:#78350f,stroke:#f59e0b,color:#e2e8f0

@@ -4,3 +4,9 @@ flowchart LR
     kfold --> extract["8 features/window<br/>mean, std, min, max<br/>range, ptp, ratio, sum"]
     extract --> classifier["RandomForest<br/>200 trees<br/>class_weight=balanced"]
     classifier --> evaluate["Per-fold metrics"]
+
+    style data fill:#1e3a5f,stroke:#3b82f6,color:#e2e8f0
+    style kfold fill:#0f766e,stroke:#14b8a6,color:#e2e8f0
+    style extract fill:#312e81,stroke:#8b5cf6,color:#e2e8f0
+    style classifier fill:#312e81,stroke:#8b5cf6,color:#e2e8f0
+    style evaluate fill:#14532d,stroke:#22c55e,color:#e2e8f0

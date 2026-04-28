@@ -9,3 +9,11 @@ flowchart LR
     output["Output<br/>[batch, seq_len, 2]"]
 
     input --> packed --> lstm1 --> lstm2 --> unpack --> fc --> output
+
+    style input fill:#1e3a5f,stroke:#3b82f6,color:#e2e8f0
+    style packed fill:#0f766e,stroke:#14b8a6,color:#e2e8f0
+    style lstm1 fill:#312e81,stroke:#8b5cf6,color:#e2e8f0
+    style lstm2 fill:#312e81,stroke:#8b5cf6,color:#e2e8f0
+    style unpack fill:#0f766e,stroke:#14b8a6,color:#e2e8f0
+    style fc fill:#78350f,stroke:#f59e0b,color:#e2e8f0
+    style output fill:#14532d,stroke:#22c55e,color:#e2e8f0
