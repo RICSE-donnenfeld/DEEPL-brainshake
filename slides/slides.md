@@ -32,6 +32,10 @@ style: |
   code {
     font-size: 0.75rem;
   }
+  blockquote {
+    font-size: 0.7rem;
+    color: #94a3b8;
+  }
   .columns {
     display: flex;
     gap: 1.5rem;
@@ -129,7 +133,7 @@ Epileptic seizures = abnormal brain electrical activity detectable via EEG.
 <img src="../out/mermaid/randomforest.svg" width="90%">
 
 - **8 features**: mean, std, min, max, range, ptp, std/range ratio, range+std
-- 200 trees, `class_weight='balanced'`
+- 200 trees
 - Patient-level 5-fold CV
 
 ---
@@ -227,18 +231,6 @@ EEG oscillates around 0 → **mean** collapses amplitude. **Std** preserves it.
 
 ---
 
-# Experiment Grid
-
-| Script                  | Runs                      | ~Time |
-| ----------------------- | ------------------------- | ----- |
-| `exp1_cnn_levels`       | CNN × 3 levels            | ~1.5h |
-| `exp2_lstm_levels_pool` | LSTM × 3 levels + 4 pools | ~5–6h |
-| `exp3_lstm_nsl`         | LSTM × 4 NS lengths       | ~3.5h |
-
-All write to `out/benchmarks/` with descriptive suffixes.
-
----
-
 # Results: Accuracy per Fold (Patient-Level)
 
 <img src="../out/plots/accuracy_by_fold.png" width="65%">
@@ -280,7 +272,7 @@ High cross-patient variance across all models; CNN ranges 79–93%.
 CNN and LSTM under window-level CV: **97–100% accuracy but 0% F1**
 
 - Round-robin assignment creates unreliable per-fold class ratios
-- Models learn to predict "non-seizure" for everything → trivially high accuracy
+- Models learn to predict "non-seizure" for everything
 - **Window-level CV is unsuitable** for this dataset
 
 ---
@@ -383,7 +375,8 @@ CNN and LSTM under window-level CV: **97–100% accuracy but 0% F1**
 - LSTM (seizure-level) achieves best results: **97.2% acc, 0.985 F1**
 - CNN (patient-level): 86.3% acc, 0.554 F1 — high variance across patients
 - Window-level CV is degenerate — poor class ratios per fold
-- Mean pooling slightly outperforms std for LSTM
+- Mean pooling slightly outperforms std for LSTM-std
+- Should try LSTM-conv with more training
 - **NSL ≤ 10** is essential; NSL ≥ 20 causes collapse
 - **Future**: remove pre/post-ictal windows, explore multichannel spatial info, longer temporal context
 
