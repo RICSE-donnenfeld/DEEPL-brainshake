@@ -44,18 +44,7 @@ style: |
 
 # Deep Learning for EEG Seizure Detection
 
-### Project Report
-
-<img src="../out/plots/average_accuracy.png" width="38%">
-
----
-
-# Abstract
-
-- **4 models**: threshold, random forest, CNN, LSTM
-- **Patient-level** and **seizure-level** cross-validation (5-fold)
-- CNN: 86.3% acc (patient-level); LSTM: **97.2% acc, 0.985 F1** (seizure-level)
-- Window-level CV produces degenerate results
+<img src="../out/plots/eeg_seizure_onset.png" width="65%">
 
 ---
 
@@ -78,7 +67,11 @@ Epileptic seizures = abnormal brain electrical activity detectable via EEG.
 
 **Goal**: automatically detect seizures in EEG recordings.
 
-**Approach**: compare progressively richer models:
+**Approach**: compare progressively richer models
+
+---
+
+# Introduction - Models
 
 1. Threshold baseline (hand-crafted rules)
 2. Random forest (hand-crafted features)
@@ -98,7 +91,7 @@ Epileptic seizures = abnormal brain electrical activity detectable via EEG.
 
 # Dataset: Feature Trends
 
-<img src="../out/data_analyze/simple_comparison.png" width="46%"> <img src="../out/data_analyze/metric_trends.png" width="46%">
+<img src="../out/data_analyze/simple_comparison.png" width="53%"> <img src="../out/data_analyze/metric_trends.png" width="40%">
 
 - **Std** and **range** separate seizure from non-seizure
 - **Mean** ≈ 0 for both → risky feature alone
@@ -109,7 +102,8 @@ Epileptic seizures = abnormal brain electrical activity detectable via EEG.
 
 <img src="../out/mermaid/data_flow.svg" width="95%">
 
-- No per-window normalization (`normalize=False`)
+- Reusing existing augmentation from the dataset
+- No per-window normalization
 - **Class weighting** helps models focus on the seizure minority
 
 ---
@@ -153,7 +147,7 @@ Epileptic seizures = abnormal brain electrical activity detectable via EEG.
 
 # Pipeline 4: LSTM
 
-*Adapted from course-provided EpilepsyLSTM (ChakrabartiChannelFusion)*
+_Adapted from course-provided EpilepsyLSTM (ChakrabartiChannelFusion)_
 
 <img src="../out/mermaid/lstm.svg" width="90%">
 
@@ -201,34 +195,16 @@ EEG oscillates around 0 → **mean** collapses amplitude. **Std** preserves it.
 
 # LSTM: Architecture
 
-```
-Input:  [batch, seq_len, n_features]
-            │
-  LSTM(input=n_features, hidden=128, layers=2, dropout=0.3)
-            │
-  Linear(128 → 2) per-timestep
-            │
-Output: [batch, seq_len, 2]
-```
+<img src="../out/mermaid/lstm_architecture.svg" width="90%">
 
 - Packed sequences for variable-length episodes
-- Class-weighted CE, `ignore_index=-1` for padding
+- Class-weighted CE
 
 ---
 
 # LSTM: conv_proj Mode
 
-Conv1d projection option replaces hand-crafted pooling:
-
-```
-[seq_len, 21, 128]
-       │
-  Conv1d(21 → 32, k=5, pad=2) → BN → ReLU
-       │
-  AdaptiveAvgPool1d(1)
-       │
-[seq_len, 32]  →  LSTM(input_size=32)
-```
+<img src="../out/mermaid/lstm_conv_proj.svg" width="90%">
 
 - Learns waveform features end-to-end
 - Faster than `none` (2688-d), more expressive than `std` (21-d)
@@ -416,4 +392,3 @@ CNN and LSTM under window-level CV: **97–100% accuracy but 0% F1**
 # Thank You
 
 **Any Questions?**
-

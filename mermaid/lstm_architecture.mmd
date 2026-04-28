@@ -1,0 +1,11 @@
+%% LSTM architecture detail
+flowchart LR
+    input["Input<br/>[batch, seq_len, n_features]"]
+    packed["Pack padded<br/>sequences"]
+    lstm1["LSTM layer 1<br/>hidden=128<br/>dropout=0.3"]
+    lstm2["LSTM layer 2<br/>hidden=128"]
+    unpack["Unpack<br/>padded sequences"]
+    fc["Linear<br/>128 → 2<br/>per-timestep"]
+    output["Output<br/>[batch, seq_len, 2]"]
+
+    input --> packed --> lstm1 --> lstm2 --> unpack --> fc --> output

@@ -1,0 +1,11 @@
+%% LSTM conv_proj mode
+flowchart LR
+    input["Raw window<br/>[seq_len, 21, 128]"]
+    conv["Conv1d<br/>21 → 32<br/>k=5, pad=2"]
+    bn["BatchNorm1d"]
+    relu["ReLU"]
+    pool["AdaptiveAvgPool1d(1)"]
+    squeeze["Squeeze<br/>[seq_len, 32]"]
+    lstm["LSTM<br/>input_size=32"]
+
+    input --> conv --> bn --> relu --> pool --> squeeze --> lstm
