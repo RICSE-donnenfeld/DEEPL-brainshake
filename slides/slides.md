@@ -364,7 +364,6 @@ CNN and LSTM under window-level CV: **97–100% accuracy but 0% F1**
 - **LSTM (seizure-level)** dominates: 97.2% acc, 0.985 F1
 - **CNN (patient-level)**: 86.3% acc but F1 only 0.554 — low recall on some patients
 - **Window-level CV** produces degenerate results for all models
-- **Threshold (75.5%)** outperforms RF (69.0%)
 - **Mean & std pooling** both work well; mean_std is unstable
 - **NSL ≥ 20** causes LSTM training collapse
 
@@ -374,11 +373,17 @@ CNN and LSTM under window-level CV: **97–100% accuracy but 0% F1**
 
 - LSTM (seizure-level) achieves best results: **97.2% acc, 0.985 F1**
 - CNN (patient-level): 86.3% acc, 0.554 F1 — high variance across patients
-- Window-level CV is degenerate — poor class ratios per fold
-- Mean pooling slightly outperforms std for LSTM-std
+- Window-level CV CNN degenerates
+- Mean pooling slightly outperforms std for LSTM-std ??
 - Should try LSTM-conv with more training
 - **NSL ≤ 10** is essential; NSL ≥ 20 causes collapse
-- **Future**: remove pre/post-ictal windows, explore multichannel spatial info, longer temporal context
+
+---
+
+# Follow-up work
+
+- Remove pre/post-ictal windows
+- Try longer temporal context
 
 ---
 
