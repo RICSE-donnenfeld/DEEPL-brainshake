@@ -104,13 +104,13 @@ Epileptic seizures = abnormal brain electrical activity detectable via EEG.
 
 - Reusing existing augmentation from the dataset
 - No per-window normalization
-- **Class weighting** helps models focus on the seizure minority
+- **Class weighting** helps models focus on seizure
 
 ---
 
 # Overview: 4 Pipelines
 
-<img src="../out/mermaid/overview.svg" width="95%">
+<img src="../out/mermaid/overview.svg" width="90%">
 
 ---
 
@@ -151,10 +151,10 @@ _Adapted from course-provided EpilepsyLSTM (ChakrabartiChannelFusion)_
 
 <img src="../out/mermaid/lstm.svg" width="90%">
 
-- **Per-timestep classification** (original: last hidden state only)
+- **Per-timestep classification**
 - **Conv1d projection** option + packed sequences for variable-length episodes
-- Per-window **pooling** (std/mean/mean_std) reduces [21, 128] → feature vector
-- Simplified classifier head, class-weighted CE with padding masking
+- Per-window **pooling** reduces [21, 128] → feature vector
+- Simplified classifier head, class-weighted CE
 
 ---
 
